@@ -9,51 +9,53 @@
 <title>Charlie's Fish Finder — difficulty is a list, not a wall</title>
 <style>
   :root {
-    --bg: #f2f7f8;
+    --bg: #e6f5f2;
     --panel: #ffffff;
-    --panel-2: #eaf2f4;
-    --ink: #16323a;
-    --ink-soft: #4e6b73;
-    --line: #d5e3e7;
-    --accent: #0e7c86;
+    --panel-2: #e0f1ee;
+    --ink: #103334;
+    --ink-soft: #4f6f70;
+    --line: #cbe6e0;
+    --accent: #08a89d;
     --accent-ink: #ffffff;
-    --setup: #2563ab;
-    --setup-bg: #e3edf8;
-    --habit: #0e7c86;
-    --habit-bg: #e0f1f2;
-    --risk: #b4590e;
-    --risk-bg: #faeadb;
-    --good: #1e7d43;
-    --good-bg: #e2f2e7;
-    --warn: #9a6a00;
-    --warn-bg: #f8f0d8;
-    --bad: #b03030;
-    --bad-bg: #f8e2e2;
-    --shadow: 0 1px 3px rgba(22,50,58,.10), 0 4px 16px rgba(22,50,58,.06);
+    --accent2: #ff6f5e;
+    --setup: #2f6fd0;
+    --setup-bg: #e2ecfb;
+    --habit: #08a89d;
+    --habit-bg: #d3f0ec;
+    --risk: #cc6612;
+    --risk-bg: #fbe8d6;
+    --good: #12855a;
+    --good-bg: #d6f2e5;
+    --warn: #b07600;
+    --warn-bg: #fbefce;
+    --bad: #d1495b;
+    --bad-bg: #fbe3e6;
+    --shadow: 0 1px 3px rgba(16,51,52,.08), 0 6px 20px rgba(16,51,52,.09);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0e1a1e;
-      --panel: #16262c;
-      --panel-2: #1d3138;
-      --ink: #dcebee;
-      --ink-soft: #8fb0b8;
-      --line: #274550;
-      --accent: #35b5bf;
-      --accent-ink: #06272b;
+      --bg: #081a1b;
+      --panel: #102a2b;
+      --panel-2: #16383a;
+      --ink: #d8f0eb;
+      --ink-soft: #7fa8a3;
+      --line: #23494a;
+      --accent: #2bd0c0;
+      --accent-ink: #052623;
+      --accent2: #ff8574;
       --setup: #7db3e8;
-      --setup-bg: #1a3049;
-      --habit: #58c2ca;
-      --habit-bg: #123c40;
+      --setup-bg: #16324a;
+      --habit: #2bd0c0;
+      --habit-bg: #103c3b;
       --risk: #e8a05c;
-      --risk-bg: #3d2a14;
-      --good: #6fce93;
-      --good-bg: #16341f;
+      --risk-bg: #3a2914;
+      --good: #5fd39b;
+      --good-bg: #123726;
       --warn: #e0c060;
-      --warn-bg: #3a3012;
-      --bad: #e88080;
-      --bad-bg: #401d1d;
-      --shadow: 0 1px 3px rgba(0,0,0,.4);
+      --warn-bg: #38300f;
+      --bad: #f0808f;
+      --bad-bg: #3d1c22;
+      --shadow: 0 2px 10px rgba(0,0,0,.5);
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -62,16 +64,22 @@
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   body {
     background: var(--bg); color: var(--ink);
+    background-image:
+      radial-gradient(1100px 480px at 88% -12%, rgba(255,111,94,.13), transparent 60%),
+      radial-gradient(900px 500px at -5% 2%, rgba(8,168,157,.16), transparent 55%);
+    background-attachment: fixed;
     font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     padding-bottom: 4rem;
   }
   header {
-    background: linear-gradient(135deg, var(--accent), #14545c);
-    color: #fff; padding: 1.6rem 1.2rem 1.4rem;
+    background:
+      radial-gradient(560px 300px at 92% -50%, rgba(255,120,100,.6), transparent 62%),
+      linear-gradient(135deg, #12c0af 0%, #0a9093 46%, #0d5a67 100%);
+    color: #fff; padding: 1.7rem 1.2rem 1.5rem; position: relative; overflow: hidden;
   }
   header .wrap, main { max-width: 1080px; margin: 0 auto; }
-  header h1 { font-size: 1.5rem; letter-spacing: .01em; }
-  header p { opacity: .92; margin-top: .3rem; max-width: 46rem; font-size: .95rem; }
+  header h1 { font-size: 1.6rem; letter-spacing: .01em; display: flex; align-items: center; gap: .5rem; }
+  header p { opacity: .95; margin-top: .35rem; max-width: 46rem; font-size: .95rem; }
   main { padding: 1.2rem; }
   h2 { font-size: 1.1rem; margin-bottom: .6rem; }
   .card {
@@ -110,25 +118,6 @@
   .crew-toggle.on { border-color: var(--accent); background: var(--habit-bg); }
   .temp-readout { font-weight: 700; font-variant-numeric: tabular-nums; }
   .invert-note { font-size: .82rem; color: var(--ink-soft); margin-top: .5rem; }
-  /* Layout */
-  .split { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 1.1rem; align-items: start; }
-  @media (max-width: 820px) { .split { grid-template-columns: 1fr; } }
-  /* Fish list */
-  .fish-list { display: flex; flex-direction: column; gap: .55rem; }
-  .fish-item {
-    display: flex; gap: .7rem; align-items: center; width: 100%;
-    background: var(--panel); border: 1.5px solid var(--line); border-radius: 12px;
-    padding: .6rem .75rem; cursor: pointer; text-align: left;
-    color: var(--ink); font: inherit;
-  }
-  .fish-item { transition: transform .12s, border-color .12s; }
-  .fish-item:hover { border-color: var(--accent); transform: translateY(-1px); }
-  .fish-item:active { transform: scale(.99); }
-  .fish-item.active { border-color: var(--accent); background: var(--habit-bg); }
-  .fish-item .emoji { font-size: 1.6rem; }
-  .fish-item .fname { font-weight: 650; font-size: .97rem; }
-  .fish-item .fmeta { font-size: .78rem; color: var(--ink-soft); }
-  .badges { display: flex; gap: .3rem; flex-wrap: wrap; margin-left: auto; }
   .badge {
     font-size: .72rem; padding: .12rem .45rem; border-radius: 999px;
     font-weight: 650; white-space: nowrap;
@@ -137,7 +126,106 @@
   .b-warn { background: var(--warn-bg); color: var(--warn); }
   .b-bad  { background: var(--bad-bg);  color: var(--bad); }
   .list-note { font-size: .82rem; color: var(--ink-soft); margin: .3rem 0 .6rem; }
+  /* Finder top bar: mode toggle + add */
+  .finder-top { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .9rem; }
+  .mode-seg { display: inline-flex; background: var(--panel-2); border-radius: 999px; padding: .25rem; gap: .2rem; }
+  .mode-btn {
+    font: inherit; font-weight: 650; font-size: .9rem; cursor: pointer; min-height: 2.3rem;
+    border: none; background: transparent; color: var(--ink-soft); padding: .35rem .95rem; border-radius: 999px;
+  }
+  .mode-btn.on { background: var(--panel); color: var(--accent); box-shadow: var(--shadow); }
+  .finder-top .btn { margin-left: auto; }
+  /* Filter chips */
+  .chips { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .9rem; }
+  .chip {
+    font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; min-height: 2.1rem;
+    border: 1.5px solid var(--line); background: var(--panel); color: var(--ink-soft);
+    padding: .3rem .75rem; border-radius: 999px;
+  }
+  .chip.on { border-color: var(--accent); background: var(--habit-bg); color: var(--accent); }
+  /* Fish gallery grid */
+  .fish-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: .9rem; }
+  .fcard {
+    position: relative; border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+    background: var(--panel); cursor: pointer; text-align: left; font: inherit; color: var(--ink);
+    box-shadow: var(--shadow); transition: transform .14s, box-shadow .14s; padding: 0;
+    display: flex; flex-direction: column;
+  }
+  .fcard:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(16,51,52,.17); }
+  .fcard:active { transform: scale(.98); }
+  .hero {
+    display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;
+  }
+  .hero::after {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(130px 70px at 50% 128%, rgba(255,255,255,.4), transparent 70%);
+  }
+  .fcard .hero { height: 94px; }
+  .hero .femoji { z-index: 1; filter: drop-shadow(0 3px 5px rgba(0,0,0,.28)); }
+  .fcard .hero .femoji { font-size: 2.9rem; }
+  .fcard .fbody { padding: .6rem .7rem .75rem; display: flex; flex-direction: column; gap: .18rem; flex: 1; }
+  .fcard .fname { font-weight: 700; font-size: .95rem; line-height: 1.2; }
+  .fcard .fmeta { font-size: .74rem; color: var(--ink-soft); }
+  .fbadges { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .35rem; }
+  .fit-dot { display: inline-flex; align-items: center; gap: .25rem; font-size: .72rem; font-weight: 700; padding: .14rem .5rem; border-radius: 999px; white-space: nowrap; }
+  .heart {
+    position: absolute; top: .45rem; right: .45rem; z-index: 2; cursor: pointer;
+    border: none; background: rgba(255,255,255,.8); color: #9fb1b2;
+    width: 1.95rem; height: 1.95rem; border-radius: 999px; font-size: .95rem; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,.18);
+    transition: transform .12s;
+  }
+  .heart:active { transform: scale(1.25); }
+  .heart.on { background: #ff6f5e; color: #fff; }
+  .mine-tag {
+    position: absolute; top: .5rem; left: .5rem; z-index: 2;
+    font-size: .68rem; font-weight: 700; background: rgba(255,255,255,.92); color: var(--setup);
+    padding: .12rem .45rem; border-radius: 999px;
+  }
+  .grid-empty { color: var(--ink-soft); font-size: .9rem; padding: 2rem 0; text-align: center; }
+  /* Swipe deck */
+  .deck { max-width: 30rem; margin: 0 auto; }
+  .deck-count { text-align: center; font-size: .85rem; color: var(--ink-soft); margin-bottom: .7rem; }
+  .swipe-stage { position: relative; height: 25rem; }
+  .swipe-card {
+    position: absolute; inset: 0; border-radius: 20px; overflow: hidden; background: var(--panel);
+    border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(16,51,52,.2);
+    display: flex; flex-direction: column; touch-action: pan-y; user-select: none;
+  }
+  .swipe-card .hero { height: 46%; }
+  .swipe-card .hero .femoji { font-size: 5rem; }
+  .swipe-card .sc-body { padding: .9rem 1.1rem; display: flex; flex-direction: column; gap: .35rem; flex: 1; }
+  .swipe-card .sc-name { font-size: 1.25rem; font-weight: 700; }
+  .swipe-card .sc-sci { font-style: italic; color: var(--ink-soft); font-size: .85rem; }
+  .swipe-card .sc-line { font-size: .88rem; margin-top: .1rem; }
+  .stamp {
+    position: absolute; top: 1.1rem; font-size: 1.4rem; font-weight: 800; letter-spacing: .05em;
+    padding: .2rem .7rem; border-radius: 10px; border: 3px solid; opacity: 0; transform: rotate(-12deg); z-index: 3; pointer-events: none;
+  }
+  .stamp.like { right: 1rem; color: #fff; border-color: #fff; background: rgba(18,133,90,.55); }
+  .stamp.nope { left: 1rem; color: #fff; border-color: #fff; background: rgba(209,73,91,.55); }
+  @keyframes flyLeft { to { transform: translateX(-140%) rotate(-18deg); opacity: 0; } }
+  @keyframes flyRight { to { transform: translateX(140%) rotate(18deg); opacity: 0; } }
+  .swipe-card.goLeft { animation: flyLeft .3s forwards; }
+  .swipe-card.goRight { animation: flyRight .3s forwards; }
+  .swipe-btns { display: flex; justify-content: center; gap: .7rem; margin-top: 1rem; }
+  .swipe-btns button {
+    font: inherit; font-weight: 700; cursor: pointer; border-radius: 999px; padding: .7rem 1.15rem;
+    border: 2px solid var(--line); background: var(--panel); font-size: 1rem; min-height: 3rem;
+  }
+  .swipe-btns .sb-skip { color: var(--bad); border-color: var(--bad); }
+  .swipe-btns .sb-info { color: var(--ink-soft); }
+  .swipe-btns .sb-like { color: #fff; background: var(--accent2); border-color: var(--accent2); }
+  .deck-done { text-align: center; padding: 1.2rem .5rem; }
+  .deck-done .big { font-size: 2.6rem; }
+  .backbtn { margin-bottom: .9rem; }
   /* Detail */
+  .detail-hero {
+    border-radius: 16px; height: 128px; display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden; margin-bottom: .9rem;
+  }
+  .detail-hero .femoji { font-size: 4.2rem; }
+  .detail-hero .heart { top: .6rem; right: .6rem; width: 2.3rem; height: 2.3rem; font-size: 1.15rem; }
   .detail-head { display: flex; gap: .9rem; align-items: flex-start; flex-wrap: wrap; }
   .detail-head .emoji { font-size: 2.6rem; }
   .detail-head h2 { font-size: 1.35rem; margin-bottom: 0; }
@@ -364,20 +452,25 @@
     </details>
   </div>
 
-  <div class="split">
-    <div>
-      <div class="btn-row" style="margin:0 0 .6rem">
-        <button class="btn" id="addFishBtn">➕ Add a fish</button>
-      </div>
-      <p class="list-note" id="listNote"></p>
-      <div class="fish-list" id="fishList"></div>
+  <div class="finder-top" id="finderTop">
+    <div class="mode-seg" id="modeSeg">
+      <button class="mode-btn" id="modeGrid">▦ Grid</button>
+      <button class="mode-btn" id="modeSwipe">🃏 Swipe</button>
     </div>
-    <div class="card" id="detail">
-      <div class="empty-detail">
-        <span class="emoji">🔍</span>
-        Pick a fish to see its diagnosis — the actual problems behind its difficulty label.
-      </div>
+    <button class="btn" id="addFishBtn">➕ Add a fish</button>
+  </div>
+
+  <div id="browseWrap">
+    <div id="gridView">
+      <div class="chips" id="filterChips"></div>
+      <div class="fish-grid" id="fishGrid"></div>
     </div>
+    <div id="swipeView" hidden></div>
+  </div>
+
+  <div id="detailWrap" hidden>
+    <button class="btn ghost backbtn" id="backBtn">← Back to fish</button>
+    <div class="card" id="detail"></div>
   </div>
   </section>
 
@@ -615,7 +708,7 @@ function defaultTasks() {
     { id: "health", emoji: "🔍", name: "Head count + health check",  every: 7,  last: null }
   ];
 }
-let state = { tank: { litres: 130, temp: 24, shrimp: true, snail: true }, verdicts: {}, sel: null, custom: [], tasks: null, view: "finder" };
+let state = { tank: { litres: 130, temp: 24, shrimp: true, snail: true }, verdicts: {}, sel: null, custom: [], tasks: null, view: "finder", finderMode: "grid", shortlist: [] };
 try {
   const saved = JSON.parse(localStorage.getItem(STORE_KEY));
   if (saved && saved.tank) state = Object.assign(state, saved);
@@ -623,6 +716,8 @@ try {
 if (!Array.isArray(state.custom)) state.custom = [];
 if (!Array.isArray(state.tasks)) state.tasks = defaultTasks();
 if (!Array.isArray(state.feedback)) state.feedback = [];
+if (!Array.isArray(state.shortlist)) state.shortlist = [];
+if (state.finderMode !== "swipe") state.finderMode = "grid";
 function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 function allFish() { return FISH.concat(state.custom); }
 function esc(s) {
@@ -680,16 +775,163 @@ function compatBadges(f) {
 
 /* ---------------- Rendering ---------------- */
 const $ = id => document.getElementById(id);
-function renderList() {
-  $("listNote").textContent = "Every fish, easy or hard, shown the same way: as a problem list. No fish is hidden from you.";
-  $("fishList").innerHTML = allFish().map(f => `
-    <button class="fish-item ${state.sel === f.id && !addMode ? "active" : ""}" data-id="${f.id}">
-      <span class="emoji">${esc(f.emoji)}</span>
-      <span><span class="fname">${esc(f.name)}</span><br><span class="fmeta">${esc(f.size)} · ${f.temp[0]}–${f.temp[1]}°C · group ${esc(f.group)}</span></span>
-      <span class="badges">${f.custom ? '<span class="badge b-mine">⭐ Charlie’s</span>' : ""}${compatBadges(f)}</span>
+/* ---- Colour heroes ---- */
+const FISH_COLORS = {
+  neon:["#2bb7e6","#e5384f"], cherrybarb:["#e8555f","#8c1f2b"], cory:["#cba25e","#7a5a2e"],
+  wcmm:["#7fc0a6","#d15a5a"], guppy:["#ff8a3c","#7f6cff"], kuhli:["#d9a441","#5b3a1e"],
+  honey:["#ffc247","#ef8a20"], dwarfg:["#2f80ed","#f2704a"], betta:["#e5397a","#4a2fb0"],
+  gbr:["#3a9fe6","#c56cff"], bolivian:["#c9b56f","#7a6a3e"], apisto:["#f2c14e","#e8622a"],
+  oto:["#9fb06a","#3e3220"], cpd:["#1f7a83","#f2c14e"], peapuffer:["#c3d94e","#5a7d1e"],
+  angel:["#c9d3d6","#2b2f36"]
+};
+function hashHue(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; }
+function fishColors(f) {
+  if (FISH_COLORS[f.id]) return FISH_COLORS[f.id];
+  const h = hashHue(f.name || f.id);
+  return [`hsl(${h} 68% 56%)`, `hsl(${(h + 34) % 360} 60% 40%)`];
+}
+function heroStyle(f) { const c = fishColors(f); return `background:linear-gradient(140deg, ${c[0]}, ${c[1]});`; }
+function fitLevel(f) { const r = compat(f); return r.some(x => x.level === "no") ? "no" : r.some(x => x.level === "meh") ? "meh" : "ok"; }
+const FIT_META = { ok: ["b-good", "✓ Fits"], meh: ["b-warn", "⚠ With care"], no: ["b-bad", "⛔ Conflict"] };
+function fitDots(f) {
+  const fm = FIT_META[fitLevel(f)], n = f.problems.length;
+  return `<span class="fit-dot ${fm[0]}">${fm[1]}</span><span class="fit-dot" style="background:var(--panel-2);color:var(--ink-soft)">${n} problem${n > 1 ? "s" : ""}</span>`;
+}
+/* ---- Shortlist ---- */
+function isShort(id) { return state.shortlist.includes(id); }
+function toggleShort(id) { const i = state.shortlist.indexOf(id); if (i >= 0) state.shortlist.splice(i, 1); else state.shortlist.push(id); save(); }
+
+/* ---- Finder navigation ---- */
+function showScreen(which) { // 'browse' | 'detail'
+  $("browseWrap").hidden = which !== "browse";
+  $("detailWrap").hidden = which !== "detail";
+  $("finderTop").style.display = which === "browse" ? "" : "none";
+}
+function renderBrowse() {
+  const grid = state.finderMode !== "swipe";
+  $("modeGrid").classList.toggle("on", grid);
+  $("modeSwipe").classList.toggle("on", !grid);
+  $("gridView").hidden = !grid;
+  $("swipeView").hidden = grid;
+  if (grid) renderGrid(); else renderSwipe();
+}
+function refreshFinder() {
+  if (!$("detailWrap").hidden) { if (addMode) renderAddPanel(); else if (state.sel) renderDetail(); }
+  else renderBrowse();
+}
+function openDetail(id) { addMode = null; state.sel = id; save(); showScreen("detail"); renderDetail(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+function openAdd(editId) { addMode = { editId: editId || null }; if (!editId) addSeg = "ai"; showScreen("detail"); renderAddPanel(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+function backToBrowse() { addMode = null; showScreen("browse"); renderBrowse(); }
+
+/* ---- Grid mode ---- */
+let gridFilter = "all";
+function renderGrid() {
+  const chips = [["all", "All"], ["ok", "✓ Fits"], ["meh", "⚠ With care"], ["no", "⛔ Conflict"],
+    ["short", `♥ Shortlist${state.shortlist.length ? " (" + state.shortlist.length + ")" : ""}`]];
+  $("filterChips").innerHTML = chips.map(([k, l]) => `<button class="chip ${gridFilter === k ? "on" : ""}" data-f="${k}">${l}</button>`).join("");
+  $("filterChips").querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => { gridFilter = c.dataset.f; renderGrid(); }));
+  let list = allFish();
+  if (gridFilter === "short") list = list.filter(f => isShort(f.id));
+  else if (gridFilter !== "all") list = list.filter(f => fitLevel(f) === gridFilter);
+  if (!list.length) {
+    $("fishGrid").innerHTML = `<div class="grid-empty">Nothing here yet${gridFilter === "short" ? " — ♥ some fish (tap the heart, or swipe right in Swipe mode)" : " — try another filter"}.</div>`;
+    return;
+  }
+  $("fishGrid").innerHTML = list.map(f => `
+    <button class="fcard" data-id="${f.id}">
+      ${f.custom ? '<span class="mine-tag">⭐ Charlie’s</span>' : ""}
+      <span class="heart ${isShort(f.id) ? "on" : ""}" data-h="${f.id}" role="button" aria-label="Shortlist">♥</span>
+      <span class="hero" style="${heroStyle(f)}"><span class="femoji">${esc(f.emoji)}</span></span>
+      <span class="fbody">
+        <span class="fname">${esc(f.name)}</span>
+        <span class="fmeta">${esc(f.size)} · ${f.temp[0]}–${f.temp[1]}°C</span>
+        <span class="fbadges">${fitDots(f)}</span>
+      </span>
     </button>`).join("");
-  document.querySelectorAll(".fish-item").forEach(el =>
-    el.addEventListener("click", () => { addMode = null; state.sel = el.dataset.id; save(); renderList(); renderDetail(); scrollToDetail(); }));
+  $("fishGrid").querySelectorAll(".fcard").forEach(el => el.addEventListener("click", e => {
+    if (e.target.closest(".heart")) return;
+    openDetail(el.dataset.id);
+  }));
+  $("fishGrid").querySelectorAll(".heart").forEach(h => h.addEventListener("click", e => {
+    e.stopPropagation(); toggleShort(h.dataset.h); renderGrid();
+  }));
+}
+
+/* ---- Swipe mode ---- */
+let swipeIdx = 0;
+function swipeMini(f) {
+  return `<button class="fcard" data-id="${f.id}"><span class="hero" style="${heroStyle(f)};height:66px"><span class="femoji" style="font-size:2.1rem">${esc(f.emoji)}</span></span><span class="fbody"><span class="fname">${esc(f.name)}</span></span></button>`;
+}
+function renderSwipe() {
+  const list = allFish();
+  if (swipeIdx >= list.length) {
+    const short = state.shortlist.map(id => list.find(f => f.id === id)).filter(Boolean);
+    $("swipeView").innerHTML = `<div class="deck"><div class="deck-done">
+      <div class="big">🎉</div>
+      <h2>That's all ${list.length} fish!</h2>
+      <p class="list-note">Your shortlist has ${short.length} — tap one to dig into its diagnosis.</p>
+      <div class="fish-grid" style="margin-top:1rem">${short.map(swipeMini).join("") || '<div class="grid-empty">No shortlist yet — start over and ♥ the ones you like.</div>'}</div>
+      <div class="btn-row" style="justify-content:center;margin-top:1rem"><button class="btn ghost" id="deckRestart">↺ Start over</button></div>
+    </div></div>`;
+    $("deckRestart").addEventListener("click", () => { swipeIdx = 0; renderSwipe(); });
+    $("swipeView").querySelectorAll(".fcard").forEach(el => el.addEventListener("click", () => openDetail(el.dataset.id)));
+    return;
+  }
+  const f = list[swipeIdx], lvl = fitLevel(f), worst = compat(f).find(r => r.level === lvl);
+  $("swipeView").innerHTML = `<div class="deck">
+    <div class="deck-count">Fish ${swipeIdx + 1} of ${list.length} · ♥ ${state.shortlist.length} shortlisted</div>
+    <div class="swipe-stage">
+      <div class="swipe-card" id="swCard">
+        <span class="stamp like" id="stLike">♥ YES</span>
+        <span class="stamp nope" id="stNope">✕ SKIP</span>
+        <span class="hero" style="${heroStyle(f)}"><span class="femoji">${esc(f.emoji)}</span></span>
+        <span class="sc-body">
+          <span class="sc-name">${esc(f.name)}${f.custom ? " ⭐" : ""}</span>
+          <span class="sc-sci">${esc(f.sci)}</span>
+          <span class="fbadges">${fitDots(f)}</span>
+          <span class="sc-line">${esc(worst ? worst.text : f.blurb)}</span>
+        </span>
+      </div>
+    </div>
+    <div class="swipe-btns">
+      <button class="sb-skip" id="swSkip">✕ Skip</button>
+      <button class="sb-info" id="swInfo">ℹ️ Details</button>
+      <button class="sb-like" id="swLike">♥ Shortlist</button>
+    </div>
+  </div>`;
+  $("swSkip").addEventListener("click", () => swipeDecide(false));
+  $("swLike").addEventListener("click", () => swipeDecide(true));
+  $("swInfo").addEventListener("click", () => openDetail(f.id));
+  attachDrag();
+}
+function swipeDecide(like) {
+  const list = allFish(), f = list[swipeIdx];
+  if (!f) return;
+  if (like && !isShort(f.id)) { state.shortlist.push(f.id); save(); }
+  const card = $("swCard");
+  if (card) { card.classList.add(like ? "goRight" : "goLeft"); setTimeout(() => { swipeIdx++; renderSwipe(); }, 270); }
+  else { swipeIdx++; renderSwipe(); }
+}
+function attachDrag() {
+  const card = $("swCard"); if (!card) return;
+  const like = $("stLike"), nope = $("stNope");
+  let startX = 0, dx = 0, dragging = false;
+  card.addEventListener("pointerdown", e => { dragging = true; startX = e.clientX; card.setPointerCapture(e.pointerId); card.style.transition = "none"; });
+  card.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    dx = e.clientX - startX;
+    card.style.transform = `translateX(${dx}px) rotate(${dx * 0.04}deg)`;
+    like.style.opacity = Math.max(0, Math.min(1, dx / 90));
+    nope.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+  });
+  const end = () => {
+    if (!dragging) return; dragging = false; card.style.transition = "";
+    if (Math.abs(dx) > 110) swipeDecide(dx > 0);
+    else { card.style.transform = ""; like.style.opacity = 0; nope.style.opacity = 0; }
+    dx = 0;
+  };
+  card.addEventListener("pointerup", end);
+  card.addEventListener("pointercancel", end);
 }
 function verdictFor(fid, i) { return (state.verdicts[fid] || {})[i] || null; }
 function renderDetail() {
@@ -720,10 +962,13 @@ function renderDetail() {
   else if (learn > 0) verdictLine = `No dealbreakers — ${learn} thing${learn>1?"s":""} to learn first. That's not a hard fish; that's a fish with homework.`;
   else verdictLine = "Every problem marked ownable. By your own analysis, this fish is not too hard for you.";
   $("detail").innerHTML = `
+    <div class="detail-hero" style="${heroStyle(f)}">
+      <span class="heart ${isShort(f.id) ? "on" : ""}" id="detHeart" role="button" aria-label="Shortlist">♥</span>
+      <span class="femoji">${esc(f.emoji)}</span>
+    </div>
     <div class="detail-head">
-      <span class="emoji">${esc(f.emoji)}</span>
       <div>
-        <h2>${esc(f.name)}</h2>
+        <h2>${esc(f.name)}${f.custom ? ' <span class="badge b-mine">⭐ Charlie’s</span>' : ""}</h2>
         <div class="sci">${esc(f.sci)}</div>
         <div class="label-strike">${f.custom ? "Researched and added by Charlie" : `Shop label: <s>"${esc(f.label)}"</s> → actual content: ${f.problems.length} named problems below`}</div>
       </div>
@@ -756,14 +1001,18 @@ function renderDetail() {
       <p style="margin-top:.45rem">${verdictLine}</p>
     </div>
     ${f.custom ? `<div class="btn-row"><button class="btn ghost" id="editFishBtn">✏️ Edit this fish</button><button class="btn danger" id="delFishBtn">🗑 Remove</button></div>` : ""}`;
+  $("detHeart").addEventListener("click", () => {
+    toggleShort(f.id);
+    $("detHeart").classList.toggle("on", isShort(f.id));
+  });
   if (f.custom) {
-    $("editFishBtn").addEventListener("click", () => { addMode = { editId: f.id }; renderList(); renderDetail(); });
+    $("editFishBtn").addEventListener("click", () => openAdd(f.id));
     $("delFishBtn").addEventListener("click", () => {
       if (!confirm(`Remove ${f.name} from your dataset?`)) return;
       state.custom = state.custom.filter(x => x.id !== f.id);
       delete state.verdicts[f.id];
-      state.sel = null; save(); renderList();
-      $("detail").innerHTML = `<div class="empty-detail"><span class="emoji">🔍</span>Pick a fish to see its diagnosis.</div>`;
+      state.shortlist = state.shortlist.filter(x => x !== f.id);
+      state.sel = null; save(); backToBrowse();
     });
   }
   document.querySelectorAll(".verdict-btns").forEach(box =>
@@ -842,7 +1091,7 @@ function saveCustomFish(fish, editId) {
     const i = state.custom.findIndex(x => x.id === editId);
     if (i >= 0) state.custom[i] = fish; else state.custom.push(fish);
   } else state.custom.push(fish);
-  addMode = null; state.sel = fish.id; save(); renderList(); renderDetail();
+  addMode = null; save(); openDetail(fish.id);
 }
 function probBlock(i, p) {
   p = p || {};
@@ -908,7 +1157,7 @@ function renderAddPanel() {
     <div class="sci">${editing ? "" : "Grow your own fishy dataset — every fish you add gets the same problem-list treatment."}</div></div></div>
     ${segBtns}${seg === "ai" ? aiHtml : formHtml}
     <div class="btn-row"><button class="btn ghost" id="cancelAddBtn">← Back</button></div>`;
-  $("cancelAddBtn").addEventListener("click", () => { addMode = null; renderList(); $("detail").innerHTML = `<div class="empty-detail"><span class="emoji">🔍</span>Pick a fish to see its diagnosis.</div>`; if (state.sel) renderDetail(); });
+  $("cancelAddBtn").addEventListener("click", () => backToBrowse());
   if (!editing) {
     $("segAi").addEventListener("click", () => { addSeg = "ai"; renderAddPanel(); });
     $("segForm").addEventListener("click", () => { addSeg = "form"; renderAddPanel(); });
@@ -1055,7 +1304,7 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v3";
+const APP_VERSION = "v4";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   return `${APP_VERSION} · ${state.view === "care" ? "My Tank" : "Fish Finder"}${f ? " · looking at " + f.name : ""} · ${t.litres}L ${t.temp}°C${t.shrimp ? " 🦐" : ""}${t.snail ? " 🐌" : ""}`;
@@ -1093,21 +1342,24 @@ function syncToggle(el, key) {
   cb.addEventListener("change", () => {
     state.tank[key] = cb.checked;
     el.classList.toggle("on", cb.checked);
-    save(); renderInvertNote(); renderTankMini(); renderList(); if (state.sel) renderDetail();
+    save(); renderInvertNote(); renderTankMini(); refreshFinder();
   });
 }
 syncToggle($("tShrimp"), "shrimp");
 syncToggle($("tSnail"), "snail");
 $("litres").addEventListener("input", () => {
   state.tank.litres = Math.max(10, +$("litres").value || 60);
-  save(); renderTankMini(); renderList(); if (state.sel) renderDetail();
+  save(); renderTankMini(); refreshFinder();
 });
 $("temp").addEventListener("input", () => {
   state.tank.temp = +$("temp").value;
   $("tempOut").textContent = state.tank.temp + "°C";
-  save(); renderInvertNote(); renderTankMini(); renderList(); if (state.sel) renderDetail();
+  save(); renderInvertNote(); renderTankMini(); refreshFinder();
 });
-$("addFishBtn").addEventListener("click", () => { addMode = { editId: null }; addSeg = "ai"; renderList(); renderAddPanel(); scrollToDetail(); });
+$("addFishBtn").addEventListener("click", () => openAdd(null));
+$("backBtn").addEventListener("click", () => backToBrowse());
+$("modeGrid").addEventListener("click", () => { state.finderMode = "grid"; save(); renderBrowse(); });
+$("modeSwipe").addEventListener("click", () => { state.finderMode = "swipe"; save(); renderBrowse(); });
 $("tabFinder").addEventListener("click", () => setView("finder"));
 $("tabCare").addEventListener("click", () => setView("care"));
 $("addTaskBtn").addEventListener("click", () => { taskFormFor = null; renderTaskForm(); });
@@ -1115,7 +1367,8 @@ $("icsBtn").addEventListener("click", () => download("charlies-fish-routine.ics"
 $("exportBtn").addEventListener("click", () => {
   download("charlies-fishy-dataset.json", JSON.stringify({
     app: "charlies-fish-finder", version: 1, exported: new Date().toISOString(),
-    tank: state.tank, verdicts: state.verdicts, custom: state.custom, tasks: state.tasks, feedback: state.feedback
+    tank: state.tank, verdicts: state.verdicts, custom: state.custom, tasks: state.tasks, feedback: state.feedback,
+    shortlist: state.shortlist, finderMode: state.finderMode
   }, null, 2), "application/json");
   dataMsg("Saved! The file is in your Downloads — keep it somewhere safe (or AirDrop it).", true);
 });
@@ -1153,14 +1406,15 @@ $("importFile").addEventListener("change", () => {
       state.custom = Array.isArray(d.custom) ? d.custom : [];
       state.tasks = Array.isArray(d.tasks) ? d.tasks : defaultTasks();
       state.feedback = Array.isArray(d.feedback) ? d.feedback : [];
-      state.sel = null; addMode = null; save();
+      state.shortlist = Array.isArray(d.shortlist) ? d.shortlist : [];
+      if (d.finderMode === "swipe" || d.finderMode === "grid") state.finderMode = d.finderMode;
+      state.sel = null; addMode = null; swipeIdx = 0; gridFilter = "all"; save();
       $("litres").value = state.tank.litres; $("temp").value = state.tank.temp; $("tempOut").textContent = state.tank.temp + "°C";
       ["tShrimp", "tSnail"].forEach((id, i) => {
         const el = $(id), key = i === 0 ? "shrimp" : "snail";
         el.querySelector("input").checked = state.tank[key]; el.classList.toggle("on", state.tank[key]);
       });
-      renderInvertNote(); renderTankMini(); renderList(); renderTasks();
-      $("detail").innerHTML = `<div class="empty-detail"><span class="emoji">🔍</span>Pick a fish to see its diagnosis.</div>`;
+      renderInvertNote(); renderTankMini(); showScreen("browse"); renderBrowse(); renderTasks();
       dataMsg("Loaded! Your dataset is back.", true);
     } catch (e) { dataMsg("Couldn't read that file as JSON.", false); }
     $("importFile").value = "";
@@ -1168,7 +1422,8 @@ $("importFile").addEventListener("change", () => {
   reader.readAsText(file);
 });
 if (narrow()) $("tankDetails").removeAttribute("open");
-renderInvertNote(); renderTankMini(); renderList(); if (state.sel) renderDetail();
+renderInvertNote(); renderTankMini();
+showScreen("browse"); renderBrowse();
 updateTabDue();
 setView(state.view === "care" ? "care" : "finder");
 </script>
