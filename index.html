@@ -157,11 +157,17 @@
     display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;
   }
   .hero::after {
-    content: ""; position: absolute; inset: 0;
+    content: ""; position: absolute; inset: 0; z-index: 1;
     background: radial-gradient(130px 70px at 50% 128%, rgba(255,255,255,.4), transparent 70%);
   }
   .fcard .hero { height: 94px; }
-  .hero .femoji { z-index: 1; filter: drop-shadow(0 3px 5px rgba(0,0,0,.28)); }
+  .hero-photo {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    opacity: 0; transition: opacity .4s ease; z-index: 0;
+  }
+  .hero-photo.on { opacity: 1; }
+  .hero.has-photo .femoji { opacity: 0; }
+  .hero .femoji { z-index: 2; filter: drop-shadow(0 3px 5px rgba(0,0,0,.28)); transition: opacity .3s; }
   .fcard .hero .femoji { font-size: 2.9rem; }
   .fcard .fbody { padding: .6rem .7rem .75rem; display: flex; flex-direction: column; gap: .18rem; flex: 1; }
   .fcard .fname { font-weight: 700; font-size: .95rem; line-height: 1.2; }
@@ -801,6 +807,73 @@ function fitDots(f) {
 function isShort(id) { return state.shortlist.includes(id); }
 function toggleShort(id) { const i = state.shortlist.indexOf(id); if (i >= 0) state.shortlist.splice(i, 1); else state.shortlist.push(id); save(); }
 
+/* ---- Photos: Wikipedia lead image, byte-cached in IndexedDB for offline ---- */
+const photoMem = {}; // id -> dataURL|url | "none" | undefined (unseen)
+let _photoDB;
+function photoDB() {
+  if (_photoDB) return _photoDB;
+  _photoDB = new Promise(res => {
+    try {
+      const r = indexedDB.open("cff-photos", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("p");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => res(null);
+    } catch (e) { res(null); }
+  });
+  return _photoDB;
+}
+async function idbGet(key) {
+  const db = await photoDB(); if (!db) return undefined;
+  return new Promise(res => {
+    try { const q = db.transaction("p", "readonly").objectStore("p").get(key); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }
+    catch (e) { res(undefined); }
+  });
+}
+async function idbSet(key, val) {
+  const db = await photoDB(); if (!db) return;
+  try { db.transaction("p", "readwrite").objectStore("p").put(val, key); } catch (e) {}
+}
+function photoKey(f) { return "cff:" + String(f.sci || f.name || f.id).toLowerCase().trim(); }
+async function fetchWikiThumb(query) {
+  const url = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=pageimages&piprop=thumbnail&pithumbsize=600&generator=search&gsrlimit=1&gsrsearch=" + encodeURIComponent(query);
+  const r = await fetch(url);
+  const j = await r.json();
+  const pages = j && j.query && j.query.pages;
+  if (!pages) return null;
+  for (const k in pages) if (pages[k].thumbnail && pages[k].thumbnail.source) return pages[k].thumbnail.source;
+  return null;
+}
+function blobToDataURL(blob) {
+  return new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(blob); });
+}
+async function loadPhoto(f) {
+  if (photoMem[f.id] !== undefined) return photoMem[f.id] === "none" ? null : photoMem[f.id];
+  const key = photoKey(f);
+  const cached = await idbGet(key);
+  if (cached !== undefined) { photoMem[f.id] = cached; return cached === "none" ? null : cached; }
+  let src;
+  try { src = await fetchWikiThumb(f.sci || f.name); }
+  catch (e) { photoMem[f.id] = "none"; return null; }   // offline/network: transient, not persisted (retries next session)
+  if (!src) { photoMem[f.id] = "none"; idbSet(key, "none"); return null; }  // genuinely no image: remember it
+  let dataUrl = null;
+  try { const resp = await fetch(src); dataUrl = await blobToDataURL(await resp.blob()); } catch (e) {}
+  if (dataUrl) { photoMem[f.id] = dataUrl; idbSet(key, dataUrl); return dataUrl; }  // cached for offline
+  photoMem[f.id] = src; return src;  // image bytes unreachable: show online-only, don't persist
+}
+function hydratePhotos(root) {
+  (root || document).querySelectorAll(".hero-photo[data-hero]").forEach(img => {
+    if (img.dataset.done) return;
+    img.dataset.done = "1";
+    const f = allFish().find(x => x.id === img.dataset.hero);
+    if (!f) return;
+    loadPhoto(f).then(url => {
+      if (!url) return;
+      img.addEventListener("load", () => { img.classList.add("on"); const h = img.closest(".hero"); if (h) h.classList.add("has-photo"); });
+      img.src = url;
+    });
+  });
+}
+
 /* ---- Finder navigation ---- */
 function showScreen(which) { // 'browse' | 'detail'
   $("browseWrap").hidden = which !== "browse";
@@ -841,7 +914,7 @@ function renderGrid() {
     <button class="fcard" data-id="${f.id}">
       ${f.custom ? '<span class="mine-tag">⭐ Charlie’s</span>' : ""}
       <span class="heart ${isShort(f.id) ? "on" : ""}" data-h="${f.id}" role="button" aria-label="Shortlist">♥</span>
-      <span class="hero" style="${heroStyle(f)}"><span class="femoji">${esc(f.emoji)}</span></span>
+      <span class="hero" style="${heroStyle(f)}"><img class="hero-photo" data-hero="${f.id}" alt=""><span class="femoji">${esc(f.emoji)}</span></span>
       <span class="fbody">
         <span class="fname">${esc(f.name)}</span>
         <span class="fmeta">${esc(f.size)} · ${f.temp[0]}–${f.temp[1]}°C</span>
@@ -855,12 +928,13 @@ function renderGrid() {
   $("fishGrid").querySelectorAll(".heart").forEach(h => h.addEventListener("click", e => {
     e.stopPropagation(); toggleShort(h.dataset.h); renderGrid();
   }));
+  hydratePhotos($("fishGrid"));
 }
 
 /* ---- Swipe mode ---- */
 let swipeIdx = 0;
 function swipeMini(f) {
-  return `<button class="fcard" data-id="${f.id}"><span class="hero" style="${heroStyle(f)};height:66px"><span class="femoji" style="font-size:2.1rem">${esc(f.emoji)}</span></span><span class="fbody"><span class="fname">${esc(f.name)}</span></span></button>`;
+  return `<button class="fcard" data-id="${f.id}"><span class="hero" style="${heroStyle(f)};height:66px"><img class="hero-photo" data-hero="${f.id}" alt=""><span class="femoji" style="font-size:2.1rem">${esc(f.emoji)}</span></span><span class="fbody"><span class="fname">${esc(f.name)}</span></span></button>`;
 }
 function renderSwipe() {
   const list = allFish();
@@ -875,6 +949,7 @@ function renderSwipe() {
     </div></div>`;
     $("deckRestart").addEventListener("click", () => { swipeIdx = 0; renderSwipe(); });
     $("swipeView").querySelectorAll(".fcard").forEach(el => el.addEventListener("click", () => openDetail(el.dataset.id)));
+    hydratePhotos($("swipeView"));
     return;
   }
   const f = list[swipeIdx], lvl = fitLevel(f), worst = compat(f).find(r => r.level === lvl);
@@ -884,7 +959,7 @@ function renderSwipe() {
       <div class="swipe-card" id="swCard">
         <span class="stamp like" id="stLike">♥ YES</span>
         <span class="stamp nope" id="stNope">✕ SKIP</span>
-        <span class="hero" style="${heroStyle(f)}"><span class="femoji">${esc(f.emoji)}</span></span>
+        <span class="hero" style="${heroStyle(f)}"><img class="hero-photo" data-hero="${f.id}" alt=""><span class="femoji">${esc(f.emoji)}</span></span>
         <span class="sc-body">
           <span class="sc-name">${esc(f.name)}${f.custom ? " ⭐" : ""}</span>
           <span class="sc-sci">${esc(f.sci)}</span>
@@ -903,6 +978,7 @@ function renderSwipe() {
   $("swLike").addEventListener("click", () => swipeDecide(true));
   $("swInfo").addEventListener("click", () => openDetail(f.id));
   attachDrag();
+  hydratePhotos($("swipeView"));
 }
 function swipeDecide(like) {
   const list = allFish(), f = list[swipeIdx];
@@ -962,7 +1038,8 @@ function renderDetail() {
   else if (learn > 0) verdictLine = `No dealbreakers — ${learn} thing${learn>1?"s":""} to learn first. That's not a hard fish; that's a fish with homework.`;
   else verdictLine = "Every problem marked ownable. By your own analysis, this fish is not too hard for you.";
   $("detail").innerHTML = `
-    <div class="detail-hero" style="${heroStyle(f)}">
+    <div class="detail-hero hero" style="${heroStyle(f)}">
+      <img class="hero-photo" data-hero="${f.id}" alt="">
       <span class="heart ${isShort(f.id) ? "on" : ""}" id="detHeart" role="button" aria-label="Shortlist">♥</span>
       <span class="femoji">${esc(f.emoji)}</span>
     </div>
@@ -1001,6 +1078,7 @@ function renderDetail() {
       <p style="margin-top:.45rem">${verdictLine}</p>
     </div>
     ${f.custom ? `<div class="btn-row"><button class="btn ghost" id="editFishBtn">✏️ Edit this fish</button><button class="btn danger" id="delFishBtn">🗑 Remove</button></div>` : ""}`;
+  hydratePhotos($("detail"));
   $("detHeart").addEventListener("click", () => {
     toggleShort(f.id);
     $("detHeart").classList.toggle("on", isShort(f.id));
@@ -1304,7 +1382,7 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v4";
+const APP_VERSION = "v5";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   return `${APP_VERSION} · ${state.view === "care" ? "My Tank" : "Fish Finder"}${f ? " · looking at " + f.name : ""} · ${t.litres}L ${t.temp}°C${t.shrimp ? " 🦐" : ""}${t.snail ? " 🐌" : ""}`;
