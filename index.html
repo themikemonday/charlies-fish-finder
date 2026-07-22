@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0e7c86">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
 <title>Charlie's Fish Finder — difficulty is a list, not a wall</title>
 <style>
   :root {
@@ -54,6 +57,9 @@
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  button, summary, .crew-toggle { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   body {
     background: var(--bg); color: var(--ink);
     font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -115,7 +121,9 @@
     padding: .6rem .75rem; cursor: pointer; text-align: left;
     color: var(--ink); font: inherit;
   }
-  .fish-item:hover { border-color: var(--accent); }
+  .fish-item { transition: transform .12s, border-color .12s; }
+  .fish-item:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .fish-item:active { transform: scale(.99); }
   .fish-item.active { border-color: var(--accent); background: var(--habit-bg); }
   .fish-item .emoji { font-size: 1.6rem; }
   .fish-item .fname { font-weight: 650; font-size: .97rem; }
@@ -187,18 +195,44 @@
     margin-top: 1.1rem; padding: .9rem 1rem; border-radius: 12px;
     background: var(--panel-2); font-size: .95rem;
   }
+  .verdict.v-good { background: var(--good-bg); border: 1px solid var(--good); }
+  .verdict.v-warn { background: var(--warn-bg); border: 1px solid var(--warn); }
+  .verdict.v-bad  { background: var(--bad-bg);  border: 1px solid var(--bad); }
+  /* Collapsible tank bar */
+  .tank-sum { cursor: pointer; list-style: none; display: flex; align-items: center; gap: .7rem; }
+  .tank-sum::-webkit-details-marker { display: none; }
+  .tank-sum h2 { margin-bottom: 0; }
+  .tank-sum::after { content: "▾"; margin-left: auto; color: var(--ink-soft); transition: transform .15s; }
+  details[open] > .tank-sum::after { transform: rotate(180deg); }
+  .tank-mini {
+    font-size: .85rem; color: var(--ink-soft); background: var(--panel-2);
+    border-radius: 999px; padding: .2rem .7rem; white-space: nowrap;
+  }
+  .tank-grid { margin-top: .9rem; }
   .verdict b { font-size: 1.02rem; }
   .verdict .counts { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .4rem; font-size: .88rem; }
   .type-legend { display: flex; gap: .9rem; flex-wrap: wrap; margin: .8rem 0 .2rem; font-size: .8rem; color: var(--ink-soft); }
   .empty-detail { text-align: center; color: var(--ink-soft); padding: 3rem 1rem; }
   .empty-detail .emoji { font-size: 3rem; display: block; margin-bottom: .6rem; }
   /* Tabs */
-  .tabs { display: flex; gap: .5rem; margin-bottom: 1.1rem; }
+  .tabs {
+    display: flex; gap: .5rem; margin-bottom: 1.1rem;
+    position: sticky; top: 0; z-index: 50; background: var(--bg);
+    padding: .6rem 0; margin-top: -.6rem;
+  }
   .tab-btn {
     font: inherit; font-weight: 650; padding: .5rem 1.1rem; border-radius: 999px;
     border: 1.5px solid var(--line); background: var(--panel); color: var(--ink-soft); cursor: pointer;
+    min-height: 2.6rem;
   }
   .tab-btn.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .tab-due[hidden] { display: none; }
+  .tab-due {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.35rem; height: 1.35rem; margin-left: .45rem; padding: 0 .3rem;
+    border-radius: 999px; background: #d64541; color: #fff; font-size: .78rem; font-weight: 700;
+    vertical-align: 1px;
+  }
   /* Buttons */
   .btn {
     font: inherit; font-weight: 650; cursor: pointer; padding: .5rem 1rem;
@@ -224,7 +258,14 @@
     border-radius: 10px; border: 1.5px solid var(--good); background: var(--good-bg); color: var(--good);
   }
   .done-btn:disabled { opacity: .55; cursor: default; }
-  .task .mini { font: inherit; font-size: .75rem; background: none; border: none; color: var(--ink-soft); cursor: pointer; text-decoration: underline; }
+  .done-btn:active { transform: scale(.95); }
+  @keyframes pop { 0% { transform: scale(.97); } 60% { transform: scale(1.015); } 100% { transform: scale(1); } }
+  .task.justdone { animation: pop .3s ease; }
+  .task .mini {
+    font: inherit; font-size: .78rem; cursor: pointer; margin-top: .3rem;
+    padding: .18rem .6rem; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--ink-soft); display: inline-block;
+  }
   /* Forms */
   .fform { display: grid; gap: .7rem; margin-top: .8rem; }
   .fform label { font-size: .82rem; color: var(--ink-soft); display: block; margin-bottom: .15rem; }
@@ -257,7 +298,7 @@
 <main>
   <nav class="tabs">
     <button class="tab-btn active" id="tabFinder">🔍 Fish Finder</button>
-    <button class="tab-btn" id="tabCare">🗓 My Tank</button>
+    <button class="tab-btn" id="tabCare">🗓 My Tank<span class="tab-due" id="tabDue" hidden></span></button>
   </nav>
 
   <section id="viewFinder">
@@ -278,7 +319,8 @@
   </div>
 
   <div class="card">
-    <h2>Your tank</h2>
+    <details id="tankDetails" open>
+    <summary class="tank-sum"><h2>Your tank</h2><span class="tank-mini" id="tankMini"></span></summary>
     <div class="tank-grid">
       <div class="tank-field">
         <label for="litres">Tank size (litres)</label>
@@ -295,6 +337,7 @@
       </div>
     </div>
     <p class="invert-note" id="invertNote"></p>
+    </details>
   </div>
 
   <div class="split">
@@ -548,6 +591,8 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 let addMode = null; // null | {editId: string|null}
+function narrow() { return window.matchMedia("(max-width: 820px)").matches; }
+function scrollToDetail() { if (narrow()) setTimeout(() => document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "start" }), 30); }
 
 /* ---------------- Compatibility engine ---------------- */
 const SHRIMP_COMFORT = [18, 26], SNAIL_COMFORT = [20, 28];
@@ -605,7 +650,7 @@ function renderList() {
       <span class="badges">${f.custom ? '<span class="badge b-mine">⭐ Charlie’s</span>' : ""}${compatBadges(f)}</span>
     </button>`).join("");
   document.querySelectorAll(".fish-item").forEach(el =>
-    el.addEventListener("click", () => { addMode = null; state.sel = el.dataset.id; save(); renderList(); renderDetail(); }));
+    el.addEventListener("click", () => { addMode = null; state.sel = el.dataset.id; save(); renderList(); renderDetail(); scrollToDetail(); }));
 }
 function verdictFor(fid, i) { return (state.verdicts[fid] || {})[i] || null; }
 function renderDetail() {
@@ -661,8 +706,8 @@ function renderDetail() {
       <span><span class="ptype pt-risk">RISK</span> watch for it, have a plan B</span>
     </div>
     ${probs}
-    <div class="verdict">
-      <b>Your verdict so far</b>
+    <div class="verdict ${todo === 0 ? (deal > 0 ? "v-bad" : learn > 0 ? "v-warn" : "v-good") : ""}">
+      <b>${todo === 0 ? "🏁 " : ""}Your verdict so far</b>
       <div class="counts">
         <span style="color:var(--good)">✓ Can own: ${own}</span>
         <span style="color:var(--warn)">📖 To learn: ${learn}</span>
@@ -869,6 +914,15 @@ function renderAddPanel() {
 function todayISO() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function daysSince(iso) { return Math.floor((new Date(todayISO() + "T12:00") - new Date(iso + "T12:00")) / 86400000); }
 let taskFormFor; // undefined | null (new) | task id being edited
+let flashId = null;
+function taskDueCount() {
+  return state.tasks.filter(t => t.last && (t.every - daysSince(t.last)) <= 0).length;
+}
+function updateTabDue() {
+  const n = taskDueCount(), el = $("tabDue");
+  el.hidden = n === 0;
+  el.textContent = n;
+}
 function renderTasks() {
   $("taskList").innerHTML = state.tasks.map(t => {
     let cls = "amber", status = "not logged yet — tap ✓ next time you do it";
@@ -879,8 +933,9 @@ function renderTasks() {
       else { cls = "green"; status = `all good — next in ${left} days`; }
       status += ` · last done ${d === 0 ? "today" : d + " day" + (d === 1 ? "" : "s") + " ago"}`;
     }
+    if (t.count) status += ` · done ${t.count}× so far`;
     const doneToday = t.last === todayISO();
-    return `<div class="task ${cls}">
+    return `<div class="task ${cls}${t.id === flashId ? " justdone" : ""}">
       <span class="t-emoji">${esc(t.emoji)}</span>
       <span><span class="t-name">${esc(t.name)}</span><br>
         <span class="t-status">every ${t.every} days · ${status}</span><br>
@@ -888,9 +943,12 @@ function renderTasks() {
       <button class="done-btn" data-done="${t.id}" ${doneToday ? "disabled" : ""}>${doneToday ? "✓ Done today" : "✓ Done"}</button>
     </div>`;
   }).join("") || `<p class="list-note">No jobs yet — add one below.</p>`;
+  flashId = null;
+  updateTabDue();
   document.querySelectorAll("[data-done]").forEach(b => b.addEventListener("click", () => {
     const t = state.tasks.find(x => x.id === b.dataset.done);
-    t.last = todayISO(); save(); renderTasks();
+    t.last = todayISO(); t.count = (t.count || 0) + 1; flashId = t.id;
+    save(); renderTasks();
   }));
   document.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => {
     const t = state.tasks.find(x => x.id === b.dataset.del);
@@ -968,6 +1026,10 @@ function setView(v) {
 }
 
 /* ---------------- Wiring ---------------- */
+function renderTankMini() {
+  const t = state.tank;
+  $("tankMini").textContent = `${t.litres} L · ${t.temp}°C${t.shrimp ? " · 🦐" : ""}${t.snail ? " · 🐌" : ""}`;
+}
 $("litres").value = state.tank.litres;
 $("temp").value = state.tank.temp;
 $("tempOut").textContent = state.tank.temp + "°C";
@@ -978,21 +1040,21 @@ function syncToggle(el, key) {
   cb.addEventListener("change", () => {
     state.tank[key] = cb.checked;
     el.classList.toggle("on", cb.checked);
-    save(); renderInvertNote(); renderList(); if (state.sel) renderDetail();
+    save(); renderInvertNote(); renderTankMini(); renderList(); if (state.sel) renderDetail();
   });
 }
 syncToggle($("tShrimp"), "shrimp");
 syncToggle($("tSnail"), "snail");
 $("litres").addEventListener("input", () => {
   state.tank.litres = Math.max(10, +$("litres").value || 60);
-  save(); renderList(); if (state.sel) renderDetail();
+  save(); renderTankMini(); renderList(); if (state.sel) renderDetail();
 });
 $("temp").addEventListener("input", () => {
   state.tank.temp = +$("temp").value;
   $("tempOut").textContent = state.tank.temp + "°C";
-  save(); renderInvertNote(); renderList(); if (state.sel) renderDetail();
+  save(); renderInvertNote(); renderTankMini(); renderList(); if (state.sel) renderDetail();
 });
-$("addFishBtn").addEventListener("click", () => { addMode = { editId: null }; addSeg = "ai"; renderList(); renderAddPanel(); });
+$("addFishBtn").addEventListener("click", () => { addMode = { editId: null }; addSeg = "ai"; renderList(); renderAddPanel(); scrollToDetail(); });
 $("tabFinder").addEventListener("click", () => setView("finder"));
 $("tabCare").addEventListener("click", () => setView("care"));
 $("addTaskBtn").addEventListener("click", () => { taskFormFor = null; renderTaskForm(); });
@@ -1024,7 +1086,7 @@ $("importFile").addEventListener("change", () => {
         const el = $(id), key = i === 0 ? "shrimp" : "snail";
         el.querySelector("input").checked = state.tank[key]; el.classList.toggle("on", state.tank[key]);
       });
-      renderInvertNote(); renderList(); renderTasks();
+      renderInvertNote(); renderTankMini(); renderList(); renderTasks();
       $("detail").innerHTML = `<div class="empty-detail"><span class="emoji">🔍</span>Pick a fish to see its diagnosis.</div>`;
       dataMsg("Loaded! Your dataset is back.", true);
     } catch (e) { dataMsg("Couldn't read that file as JSON.", false); }
@@ -1032,7 +1094,9 @@ $("importFile").addEventListener("change", () => {
   };
   reader.readAsText(file);
 });
-renderInvertNote(); renderList(); if (state.sel) renderDetail();
+if (narrow()) $("tankDetails").removeAttribute("open");
+renderInvertNote(); renderTankMini(); renderList(); if (state.sel) renderDetail();
+updateTabDue();
 setView(state.view === "care" ? "care" : "finder");
 </script>
 </body>
