@@ -284,6 +284,30 @@
   .seg { display: flex; gap: .4rem; margin: .8rem 0 .2rem; }
   .b-mine { background: var(--setup-bg); color: var(--setup); }
   .prompt-box { font-family: ui-monospace, monospace; font-size: .78rem; height: 11rem; }
+  /* Feedback */
+  .fab {
+    position: fixed; right: 1rem; bottom: 1rem; z-index: 60;
+    font: inherit; font-weight: 650; cursor: pointer; font-size: 1.25rem;
+    border-radius: 999px; padding: .65rem .85rem; border: none;
+    background: var(--accent); color: var(--accent-ink);
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  }
+  .fab:active { transform: scale(.93); }
+  .fb-panel {
+    position: fixed; right: 1rem; bottom: 4.4rem; z-index: 60;
+    width: min(26rem, calc(100vw - 2rem));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.3); padding: 1rem 1.1rem;
+  }
+  .fb-panel h3 { font-size: 1.02rem; margin-bottom: .2rem; }
+  .fb-note { font-size: .8rem; color: var(--ink-soft); margin-bottom: .6rem; }
+  .fb-panel textarea {
+    width: 100%; min-height: 6.5rem; padding: .55rem .65rem; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--panel-2); color: var(--ink); font: inherit; font-size: .95rem; resize: vertical;
+  }
+  .fb-prev { font-size: .78rem; color: var(--ink-soft); margin-top: .6rem; max-height: 7rem; overflow-y: auto; }
+  .fb-prev div { padding: .25rem 0; border-top: 1px dashed var(--line); }
+  .fb-sent { font-size: .85rem; color: var(--good); font-weight: 650; margin-top: .5rem; }
   footer { max-width: 1080px; margin: 1rem auto 0; padding: 0 1.2rem; font-size: .78rem; color: var(--ink-soft); }
 </style>
 </head>
@@ -381,6 +405,20 @@
     </div>
   </section>
 </main>
+
+<button class="fab" id="fbBtn" title="Tell Dad what's broken or rubbish">💬</button>
+<div class="fb-panel" id="fbPanel" hidden>
+  <h3>Something broken or rubbish? 🛠</h3>
+  <p class="fb-note">Type it like a text message — one tap sends it to Dad, and a copy stays saved in the app so it can't get lost.</p>
+  <textarea id="fbText" placeholder="e.g. the shrimp badge is confusing… / I want a search box… / this fish info is wrong because…"></textarea>
+  <div class="btn-row">
+    <button class="btn" id="fbSend">📤 Send to Dad</button>
+    <button class="btn ghost" id="fbClose">Close</button>
+  </div>
+  <p class="fb-sent" id="fbSentMsg" hidden>Saved ✓ — now pick where to send it.</p>
+  <div class="fb-prev" id="fbPrev"></div>
+</div>
+
 <footer>
   All care figures are typical guidance, not gospel — part of the skill is cross-checking against at least two sources before buying. Choices you mark are saved on this device.
 </footer>
@@ -584,6 +622,7 @@ try {
 } catch (e) {}
 if (!Array.isArray(state.custom)) state.custom = [];
 if (!Array.isArray(state.tasks)) state.tasks = defaultTasks();
+if (!Array.isArray(state.feedback)) state.feedback = [];
 function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 function allFish() { return FISH.concat(state.custom); }
 function esc(s) {
@@ -1015,6 +1054,20 @@ function dataMsg(text, ok) {
   setTimeout(() => { m.hidden = true; }, 5000);
 }
 
+/* ---------------- Feedback ---------------- */
+const APP_VERSION = "v3";
+function fbContext() {
+  const f = allFish().find(x => x.id === state.sel), t = state.tank;
+  return `${APP_VERSION} · ${state.view === "care" ? "My Tank" : "Fish Finder"}${f ? " · looking at " + f.name : ""} · ${t.litres}L ${t.temp}°C${t.shrimp ? " 🦐" : ""}${t.snail ? " 🐌" : ""}`;
+}
+function renderFbPrev() {
+  const list = state.feedback.slice(-5).reverse();
+  $("fbPrev").innerHTML = list.length
+    ? `<b>Sent so far (${state.feedback.length}):</b>` + list.map(n =>
+        `<div>${esc(n.when.slice(0, 10))} — ${esc(n.text.length > 80 ? n.text.slice(0, 80) + "…" : n.text)}</div>`).join("")
+    : "";
+}
+
 /* ---------------- Tabs ---------------- */
 function setView(v) {
   state.view = v; save();
@@ -1062,9 +1115,28 @@ $("icsBtn").addEventListener("click", () => download("charlies-fish-routine.ics"
 $("exportBtn").addEventListener("click", () => {
   download("charlies-fishy-dataset.json", JSON.stringify({
     app: "charlies-fish-finder", version: 1, exported: new Date().toISOString(),
-    tank: state.tank, verdicts: state.verdicts, custom: state.custom, tasks: state.tasks
+    tank: state.tank, verdicts: state.verdicts, custom: state.custom, tasks: state.tasks, feedback: state.feedback
   }, null, 2), "application/json");
   dataMsg("Saved! The file is in your Downloads — keep it somewhere safe (or AirDrop it).", true);
+});
+$("fbBtn").addEventListener("click", () => {
+  const p = $("fbPanel");
+  p.hidden = !p.hidden;
+  if (!p.hidden) { $("fbSentMsg").hidden = true; renderFbPrev(); $("fbText").focus(); }
+});
+$("fbClose").addEventListener("click", () => { $("fbPanel").hidden = true; });
+$("fbSend").addEventListener("click", async () => {
+  const text = $("fbText").value.trim();
+  if (!text) { $("fbText").focus(); return; }
+  const note = { when: new Date().toISOString(), text, context: fbContext() };
+  state.feedback.push(note); save();
+  $("fbText").value = ""; $("fbSentMsg").hidden = false; renderFbPrev();
+  const msg = `🐠 Fish Finder feedback\n\n${text}\n\n— ${note.context}`;
+  if (navigator.share) {
+    try { await navigator.share({ text: msg }); return; }
+    catch (e) { if (e.name === "AbortError") return; }
+  }
+  location.href = "mailto:mm@mikemonday.com?subject=" + encodeURIComponent("Fish Finder feedback") + "&body=" + encodeURIComponent(msg);
 });
 $("importBtn").addEventListener("click", () => $("importFile").click());
 $("importFile").addEventListener("change", () => {
@@ -1080,6 +1152,7 @@ $("importFile").addEventListener("change", () => {
       state.verdicts = d.verdicts || {};
       state.custom = Array.isArray(d.custom) ? d.custom : [];
       state.tasks = Array.isArray(d.tasks) ? d.tasks : defaultTasks();
+      state.feedback = Array.isArray(d.feedback) ? d.feedback : [];
       state.sel = null; addMode = null; save();
       $("litres").value = state.tank.litres; $("temp").value = state.tank.temp; $("tempOut").textContent = state.tank.temp + "°C";
       ["tShrimp", "tSnail"].forEach((id, i) => {
