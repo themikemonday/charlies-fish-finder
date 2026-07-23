@@ -412,6 +412,8 @@
     width: 100%; min-height: 6.5rem; padding: .55rem .65rem; border: 1px solid var(--line);
     border-radius: 10px; background: var(--panel-2); color: var(--ink); font: inherit; font-size: .95rem; resize: vertical;
   }
+  .fb-setup { margin-top: .7rem; }
+  .fb-setup summary { font-size: .8rem; color: var(--ink-soft); cursor: pointer; }
   .fb-prev { font-size: .78rem; color: var(--ink-soft); margin-top: .6rem; max-height: 7rem; overflow-y: auto; }
   .fb-prev div { padding: .25rem 0; border-top: 1px dashed var(--line); }
   .fb-sent { font-size: .85rem; color: var(--good); font-weight: 650; margin-top: .5rem; }
@@ -526,14 +528,22 @@
 <button class="fab" id="fbBtn" title="Tell Dad what's broken or rubbish">💬</button>
 <div class="fb-panel" id="fbPanel" hidden>
   <h3>Something broken or rubbish? 🛠</h3>
-  <p class="fb-note">Type it like a text message — one tap sends it to Dad, and a copy stays saved in the app so it can't get lost.</p>
+  <p class="fb-note" id="fbIntro"></p>
   <textarea id="fbText" placeholder="e.g. the shrimp badge is confusing… / I want a search box… / this fish info is wrong because…"></textarea>
   <div class="btn-row">
     <button class="btn" id="fbSend">📤 Send to Dad</button>
     <button class="btn ghost" id="fbClose">Close</button>
   </div>
-  <p class="fb-sent" id="fbSentMsg" hidden>Saved ✓ — now pick where to send it.</p>
+  <p class="fb-sent" id="fbSentMsg" hidden>Saved ✓</p>
   <div class="fb-prev" id="fbPrev"></div>
+  <details class="fb-setup">
+    <summary>⚙︎ Direct-to-Dad setup</summary>
+    <p class="fb-note">Put Dad's mobile number here once and "Send" will open Messages with the note already written — no share-sheet picking. The number stays on this device only.</p>
+    <div class="btn-row">
+      <input type="tel" id="fbPhone" placeholder="Dad's mobile, e.g. +44 7…" style="flex:1;min-width:0;padding:.45rem .6rem;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--ink);font:inherit">
+      <button class="btn ghost" id="fbPhoneSave">Save</button>
+    </div>
+  </details>
 </div>
 
 <footer>
@@ -740,6 +750,7 @@ try {
 if (!Array.isArray(state.custom)) state.custom = [];
 if (!Array.isArray(state.tasks)) state.tasks = defaultTasks();
 if (!Array.isArray(state.feedback)) state.feedback = [];
+if (typeof state.fbPhone !== "string") state.fbPhone = "";
 if (!Array.isArray(state.shortlist)) state.shortlist = [];
 if (state.finderMode !== "swipe") state.finderMode = "grid";
 function migrateTank() {
@@ -1459,17 +1470,25 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v6";
+const APP_VERSION = "v7";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   return `${APP_VERSION} · ${state.view === "care" ? "My Tank" : "Fish Finder"}${f ? " · looking at " + f.name : ""} · ${t.litres}L ${t.temp}°C${t.shrimp ? " 🦐" : ""}${t.snail ? " 🐌" : ""}`;
 }
+function isAppleTouch() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
+function smsUrl(phone, msg) { return "sms:" + phone.replace(/[^\d+]/g, "") + (isAppleTouch() ? "&" : "?") + "body=" + encodeURIComponent(msg); }
 async function shareFeedback(msg) {
+  if (state.fbPhone) { location.href = smsUrl(state.fbPhone, msg); return; }
   if (navigator.share) {
     try { await navigator.share({ text: msg }); return; }
     catch (e) { if (e.name === "AbortError") return; }
   }
   location.href = "mailto:mm@mikemonday.com?subject=" + encodeURIComponent("Fish Finder feedback") + "&body=" + encodeURIComponent(msg);
+}
+function renderFbIntro() {
+  $("fbIntro").textContent = state.fbPhone
+    ? `Type it like a text — "Send" opens Messages straight to Dad (…${state.fbPhone.replace(/[^\d]/g, "").slice(-4)}), and a copy stays saved in the app.`
+    : "Type it like a text message — one tap sends it to Dad, and a copy stays saved in the app so it can't get lost. (Tip: set up Direct-to-Dad below for one-tap sending.)";
 }
 function fbMsg(note) { return `🐠 Fish Finder feedback\n\n${note.text}\n\n— ${note.context}`; }
 function renderFbPrev() {
@@ -1542,14 +1561,20 @@ $("exportBtn").addEventListener("click", () => {
   download("charlies-fishy-dataset.json", JSON.stringify({
     app: "charlies-fish-finder", version: 1, exported: new Date().toISOString(),
     tank: state.tank, verdicts: state.verdicts, custom: state.custom, tasks: state.tasks, feedback: state.feedback,
-    shortlist: state.shortlist, finderMode: state.finderMode
+    shortlist: state.shortlist, finderMode: state.finderMode, fbPhone: state.fbPhone
   }, null, 2), "application/json");
   dataMsg("Saved! The file is in your Downloads — keep it somewhere safe (or AirDrop it).", true);
 });
 $("fbBtn").addEventListener("click", () => {
   const p = $("fbPanel");
   p.hidden = !p.hidden;
-  if (!p.hidden) { $("fbSentMsg").hidden = true; renderFbPrev(); $("fbText").focus(); }
+  if (!p.hidden) { $("fbSentMsg").hidden = true; renderFbIntro(); renderFbPrev(); $("fbPhone").value = state.fbPhone; $("fbText").focus(); }
+});
+$("fbPhoneSave").addEventListener("click", () => {
+  state.fbPhone = $("fbPhone").value.trim();
+  save(); renderFbIntro();
+  $("fbPhoneSave").textContent = "✅ Saved";
+  setTimeout(() => { $("fbPhoneSave").textContent = "Save"; }, 1500);
 });
 $("fbClose").addEventListener("click", () => { $("fbPanel").hidden = true; });
 $("fbSend").addEventListener("click", async () => {
@@ -1576,6 +1601,7 @@ $("importFile").addEventListener("change", () => {
       state.tasks = Array.isArray(d.tasks) ? d.tasks : defaultTasks();
       state.feedback = Array.isArray(d.feedback) ? d.feedback : [];
       state.shortlist = Array.isArray(d.shortlist) ? d.shortlist : [];
+      state.fbPhone = typeof d.fbPhone === "string" ? d.fbPhone : "";
       if (d.finderMode === "swipe" || d.finderMode === "grid") state.finderMode = d.finderMode;
       state.sel = null; addMode = null; swipeIdx = 0; gridFilter = "all"; migrateTank(); save();
       $("litres").value = state.tank.litres; $("temp").value = state.tank.temp; $("tempOut").textContent = state.tank.temp + "°C";
