@@ -180,6 +180,7 @@
   }
   .hero-photo.on { opacity: 1; }
   .hero.has-photo .femoji { opacity: 0; }
+  .hero.has-photo::after { display: none; }
   .hero .femoji { z-index: 2; filter: drop-shadow(0 3px 5px rgba(0,0,0,.28)); transition: opacity .3s; }
   .fcard .hero .femoji { font-size: 2.9rem; }
   .fcard .fbody { padding: .6rem .7rem .75rem; display: flex; flex-direction: column; gap: .18rem; flex: 1; }
@@ -211,7 +212,7 @@
     border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(16,51,52,.2);
     display: flex; flex-direction: column; touch-action: pan-y; user-select: none;
   }
-  .swipe-card .hero { height: 46%; }
+  .swipe-card .hero { height: 52%; }
   .swipe-card .hero .femoji { font-size: 5rem; }
   .swipe-card .sc-body { padding: .9rem 1.1rem; display: flex; flex-direction: column; gap: .35rem; flex: 1; }
   .swipe-card .sc-name { font-size: 1.25rem; font-weight: 700; }
@@ -240,9 +241,13 @@
   .backbtn { margin-bottom: .9rem; }
   /* Detail */
   .detail-hero {
-    border-radius: 16px; height: 128px; display: flex; align-items: center; justify-content: center;
-    position: relative; overflow: hidden; margin-bottom: .9rem;
+    border-radius: 16px; display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+    width: 100%; max-width: 30rem; margin: 0 auto .9rem;
+    aspect-ratio: 3 / 2; max-height: 19rem;
   }
+  /* whole fish visible on the page you study it on — never crop the tail off */
+  .detail-hero .hero-photo { object-fit: contain; }
   .detail-hero .femoji { font-size: 4.2rem; }
   .detail-hero .heart { top: .6rem; right: .6rem; width: 2.3rem; height: 2.3rem; font-size: 1.15rem; }
   .detail-head { display: flex; gap: .9rem; align-items: flex-start; flex-wrap: wrap; }
@@ -1470,7 +1475,7 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v7";
+const APP_VERSION = "v8";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   return `${APP_VERSION} · ${state.view === "care" ? "My Tank" : "Fish Finder"}${f ? " · looking at " + f.name : ""} · ${t.litres}L ${t.temp}°C${t.shrimp ? " 🦐" : ""}${t.snail ? " 🐌" : ""}`;
