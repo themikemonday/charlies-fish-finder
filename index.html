@@ -530,22 +530,22 @@
   </section>
 </main>
 
-<button class="fab" id="fbBtn" title="Tell Dad what's broken or rubbish">💬</button>
+<button class="fab" id="fbBtn" title="Tell Daddy what's broken or rubbish">💬</button>
 <div class="fb-panel" id="fbPanel" hidden>
   <h3>Something broken or rubbish? 🛠</h3>
   <p class="fb-note" id="fbIntro"></p>
   <textarea id="fbText" placeholder="e.g. the shrimp badge is confusing… / I want a search box… / this fish info is wrong because…"></textarea>
   <div class="btn-row">
-    <button class="btn" id="fbSend">📤 Send to Dad</button>
+    <button class="btn" id="fbSend">📤 Send to Daddy</button>
     <button class="btn ghost" id="fbClose">Close</button>
   </div>
   <p class="fb-sent" id="fbSentMsg" hidden>Saved ✓</p>
   <div class="fb-prev" id="fbPrev"></div>
   <details class="fb-setup">
-    <summary>⚙︎ Direct-to-Dad setup</summary>
-    <p class="fb-note">Put Dad's mobile number here once and "Send" will open Messages with the note already written — no share-sheet picking. The number stays on this device only.</p>
+    <summary>⚙︎ Direct-to-Daddy setup</summary>
+    <p class="fb-note">Put Daddy's mobile number here once and "Send" will open Messages with the note already written — no share-sheet picking. The number stays on this device only.</p>
     <div class="btn-row">
-      <input type="tel" id="fbPhone" placeholder="Dad's mobile, e.g. +44 7…" style="flex:1;min-width:0;padding:.45rem .6rem;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--ink);font:inherit">
+      <input type="tel" id="fbPhone" placeholder="Daddy's mobile, e.g. +44 7…" style="flex:1;min-width:0;padding:.45rem .6rem;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--ink);font:inherit">
       <button class="btn ghost" id="fbPhoneSave">Save</button>
     </div>
   </details>
@@ -1492,8 +1492,8 @@ async function shareFeedback(msg) {
 }
 function renderFbIntro() {
   $("fbIntro").textContent = state.fbPhone
-    ? `Type it like a text — "Send" opens Messages straight to Dad (…${state.fbPhone.replace(/[^\d]/g, "").slice(-4)}), and a copy stays saved in the app.`
-    : "Type it like a text message — one tap sends it to Dad, and a copy stays saved in the app so it can't get lost. (Tip: set up Direct-to-Dad below for one-tap sending.)";
+    ? `Type it like a text — "Send" opens Messages straight to Daddy (…${state.fbPhone.replace(/[^\d]/g, "").slice(-4)}), and a copy stays saved in the app.`
+    : "Type it like a text message — one tap sends it to Daddy, and a copy stays saved in the app so it can't get lost. (Tip: set up Direct-to-Daddy below for one-tap sending.)";
 }
 function fbMsg(note) { return `🐠 Fish Finder feedback\n\n${note.text}\n\n— ${note.context}`; }
 function renderFbPrev() {
