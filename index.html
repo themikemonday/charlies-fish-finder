@@ -417,6 +417,33 @@
     width: 100%; min-height: 6.5rem; padding: .55rem .65rem; border: 1px solid var(--line);
     border-radius: 10px; background: var(--panel-2); color: var(--ink); font: inherit; font-size: .95rem; resize: vertical;
   }
+  /* Stocking */
+  .stock-row {
+    display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
+    border: 1px solid var(--line); border-radius: 12px; padding: .6rem .8rem; margin-top: .6rem; background: var(--panel);
+  }
+  .stock-row .sr-emoji { font-size: 1.5rem; }
+  .stock-row .sr-name { font-weight: 650; }
+  .stock-row .sr-meta { font-size: .78rem; color: var(--ink-soft); }
+  .stock-row input[type=number] {
+    width: 4.2rem; padding: .3rem .45rem; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel-2); color: var(--ink); font: inherit;
+  }
+  .stock-row .rm { margin-left: auto; }
+  .gauge { height: 1.5rem; border-radius: 999px; background: var(--panel-2); overflow: hidden; margin: .5rem 0 .3rem; position: relative; }
+  .gauge span { display: block; height: 100%; transition: width .3s; }
+  .g-ok { background: linear-gradient(90deg, #12855a, #35c48b); }
+  .g-warn { background: linear-gradient(90deg, #b07600, #e8b23c); }
+  .g-bad { background: linear-gradient(90deg, #d1495b, #f0808f); }
+  .stock-pct { font-size: 2rem; font-weight: 800; line-height: 1.1; }
+  .stock-verdict { font-size: .95rem; margin-top: .2rem; }
+  .levels { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .7rem; }
+  .level-pill { font-size: .8rem; padding: .25rem .6rem; border-radius: 999px; background: var(--panel-2); color: var(--ink-soft); }
+  .workings { font-size: .82rem; color: var(--ink-soft); margin-top: .8rem; }
+  .workings summary { cursor: pointer; font-weight: 650; color: var(--accent); }
+  .workings table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+  .workings td, .workings th { text-align: left; padding: .25rem .4rem; border-bottom: 1px solid var(--line); }
+  .stock-warn { font-size: .88rem; padding: .5rem .7rem; border-radius: 9px; margin-top: .5rem; }
   .fb-setup { margin-top: .7rem; }
   .fb-setup summary { font-size: .8rem; color: var(--ink-soft); cursor: pointer; }
   .fb-prev { font-size: .78rem; color: var(--ink-soft); margin-top: .6rem; max-height: 7rem; overflow-y: auto; }
@@ -437,6 +464,7 @@
   <nav class="tabs">
     <button class="tab-btn active" id="tabFinder">🔍 Fish Finder</button>
     <button class="tab-btn" id="tabCare">🗓 My Tank<span class="tab-due" id="tabDue" hidden></span></button>
+    <button class="tab-btn" id="tabStock">📊 Stocking</button>
   </nav>
 
   <section id="viewFinder">
@@ -467,6 +495,18 @@
       <div class="tank-field">
         <label for="temp">Heater set to <span class="temp-readout" id="tempOut">24°C</span></label>
         <input type="range" id="temp" min="16" max="30" step="1" value="24">
+      </div>
+      <div class="tank-field">
+        <label for="wpH">Water — pH</label>
+        <input type="number" id="wpH" min="4" max="10" step="0.1" placeholder="—">
+      </div>
+      <div class="tank-field">
+        <label for="wGH">GH (dGH)</label>
+        <input type="number" id="wGH" min="0" max="30" step="1" placeholder="—">
+      </div>
+      <div class="tank-field">
+        <label for="wKH">KH (dKH)</label>
+        <input type="number" id="wKH" min="0" max="30" step="1" placeholder="—">
       </div>
       <div class="tank-field">
         <label>Current crew</label>
@@ -526,6 +566,38 @@
         <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
       <p class="form-msg" id="dataMsg" hidden></p>
+    </div>
+  </section>
+
+  <section id="viewStock" hidden>
+    <div class="card">
+      <h2>📊 Stocking plan</h2>
+      <p class="list-note">Build the tank you're thinking about and see how full it gets. This is a <em>rough guide</em>, not a rule — the workings are shown so you can argue with them.</p>
+      <div class="tank-grid">
+        <div class="tank-field">
+          <label for="stFiltration">Filtration</label>
+          <select id="stFiltration" class="crew-select">
+            <option value="under">Light (under-filtered)</option>
+            <option value="standard">Standard filter</option>
+            <option value="over">Strong (2×+ turnover)</option>
+          </select>
+        </div>
+        <div class="tank-field">
+          <label for="stPlanting">Planting density</label>
+          <select id="stPlanting" class="crew-select">
+            <option value="bare">Bare / few plants</option>
+            <option value="some">Some plants</option>
+            <option value="heavy">Heavily planted</option>
+          </select>
+        </div>
+        <div class="tank-field">
+          <label>Tank</label>
+          <span class="tank-mini" id="stTankMini"></span>
+        </div>
+      </div>
+      <div id="stockAdd" class="btn-row"></div>
+      <div id="stockList"></div>
+      <div id="stockResult"></div>
     </div>
   </section>
 </main>
@@ -737,6 +809,42 @@ const FISH = [
   }
 ];
 
+/* ---- Water chemistry, adult size and stocking data ----
+   ph/gh are typical keeping ranges (gh in dGH), cm is adult length, load is a
+   messiness multiplier (a cichlid dirties more water than a tetra of the same
+   length), level is where it spends its time, minGroup is the smallest sane group.
+   Same honesty rule as the rest: typical hobbyist guidance, worth cross-checking. */
+const FISH_EXTRA = {
+  neon:       { ph:[5.0,7.2], gh:[1,10],  cm:3,    load:1.0, level:"mid",    minGroup:8  },
+  cherrybarb: { ph:[6.0,7.5], gh:[5,15],  cm:5,    load:1.0, level:"mid",    minGroup:6  },
+  cory:       { ph:[6.0,7.5], gh:[2,15],  cm:6.5,  load:1.1, level:"bottom", minGroup:6  },
+  wcmm:       { ph:[6.0,8.0], gh:[5,19],  cm:4,    load:1.0, level:"mid",    minGroup:8  },
+  guppy:      { ph:[7.0,8.5], gh:[8,20],  cm:4,    load:1.0, level:"top",    minGroup:3  },
+  kuhli:      { ph:[5.5,7.0], gh:[1,10],  cm:9,    load:0.8, level:"bottom", minGroup:5  },
+  honey:      { ph:[6.0,7.5], gh:[3,12],  cm:5,    load:1.0, level:"top",    minGroup:1  },
+  dwarfg:     { ph:[6.0,7.5], gh:[3,15],  cm:7,    load:1.1, level:"top",    minGroup:1, solo:true },
+  betta:      { ph:[6.0,7.5], gh:[3,15],  cm:6.5,  load:1.0, level:"top",    minGroup:1, solo:true },
+  gbr:        { ph:[5.0,7.0], gh:[1,8],   cm:6,    load:1.2, level:"mid",    minGroup:1  },
+  bolivian:   { ph:[6.0,7.8], gh:[3,15],  cm:8,    load:1.2, level:"bottom", minGroup:1  },
+  apisto:     { ph:[6.0,7.5], gh:[3,12],  cm:7,    load:1.2, level:"bottom", minGroup:1  },
+  oto:        { ph:[6.0,7.5], gh:[2,15],  cm:4,    load:0.8, level:"all",    minGroup:6  },
+  cpd:        { ph:[6.5,7.5], gh:[2,10],  cm:2.5,  load:0.8, level:"mid",    minGroup:10 },
+  peapuffer:  { ph:[6.5,7.8], gh:[4,15],  cm:3,    load:1.3, level:"mid",    minGroup:1, solo:true },
+  angel:      { ph:[6.0,7.5], gh:[3,13],  cm:15,   load:1.3, level:"mid",    minGroup:1  }
+};
+FISH.forEach(f => Object.assign(f, FISH_EXTRA[f.id] || {}));
+
+/* Charlie's own added fish may predate these fields — fill sane fallbacks so the
+   stocking maths never silently treats them as zero. */
+function fishCm(f) {
+  if (f.cm > 0) return f.cm;
+  const m = String(f.size || "").match(/[\d.]+/);
+  return m ? +m[0] : 5;
+}
+function fishLoad(f) { return f.load > 0 ? f.load : 1.0; }
+function fishLevel(f) { return ["top", "mid", "bottom", "all"].includes(f.level) ? f.level : "mid"; }
+function fishMinGroup(f) { return f.minGroup > 0 ? f.minGroup : 1; }
+
 /* ---------------- State ---------------- */
 const STORE_KEY = "fishdecider-v1";
 function defaultTasks() {
@@ -761,6 +869,10 @@ if (state.finderMode !== "swipe") state.finderMode = "grid";
 function migrateTank() {
   if (!Array.isArray(state.tank.crewFish)) state.tank.crewFish = [];
   if (state.tank.shrimpType !== "amano") state.tank.shrimpType = "neo";
+  // null means "not tested yet" — chemistry checks stay silent rather than guessing
+  ["ph", "gh", "kh"].forEach(k => { if (typeof state.tank[k] !== "number") state.tank[k] = null; });
+  if (!state.stock || typeof state.stock !== "object") state.stock = { filtration: "standard", planting: "some", planned: [] };
+  if (!Array.isArray(state.stock.planned)) state.stock.planned = [];
 }
 migrateTank();
 function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -775,11 +887,14 @@ function scrollToDetail() { if (narrow()) setTimeout(() => document.getElementBy
 
 /* ---------------- Compatibility engine ---------------- */
 const SHRIMP_TYPES = {
-  neo:   { label: "cherry shrimp", comfort: [18, 26], breeds: true },
-  amano: { label: "amano-type shrimp (Caridina typus)", comfort: [20, 28], breeds: false }
+  neo:   { label: "cherry shrimp", comfort: [18, 26], breeds: true, ph: [6.4, 7.6], gh: [6, 12] },
+  amano: { label: "amano-type shrimp (Caridina typus)", comfort: [20, 28], breeds: false, ph: [6.5, 7.8], gh: [6, 15] }
 };
 function shrimpInfo() { return SHRIMP_TYPES[state.tank.shrimpType] || SHRIMP_TYPES.neo; }
 const SNAIL_COMFORT = [20, 28];
+/* A mystery snail builds its shell out of the water — soft, acidic water pits and
+   erodes it. This is the collision that soft-water fish create. */
+const SNAIL_PH = [7.0, 8.2], SNAIL_GH = [8, 18], SNAIL_KH_MIN = 4;
 function compat(f) {
   const t = state.tank, out = [];
   // temperature: does the tank's current setting suit the fish?
@@ -813,6 +928,40 @@ function compat(f) {
     if (f.snail === "no") out.push({ level:"no", ico:"🐌", text:"Will attack or eat your mystery snail." });
     else if (f.snail === "risky") out.push({ level:"meh", ico:"🐌", text:"May nip the snail's antennae — depends on the individual." });
     else out.push({ level:"ok", ico:"🐌", text:"Mystery snail is safe with this fish." });
+  }
+  // water chemistry — silent until Charlie has actually tested
+  const band = (val, range, slack) => val < range[0] - slack || val > range[1] + slack ? "no"
+    : (val < range[0] || val > range[1] ? "meh" : "ok");
+  if (typeof t.ph === "number" && f.ph) {
+    const lvl = band(t.ph, f.ph, 0.5);
+    out.push({ level: lvl, ico: "🧪", text: lvl === "ok"
+      ? `pH works: your ${t.ph} sits inside its ${f.ph[0]}–${f.ph[1]} range.`
+      : `Your pH is ${t.ph}; this fish wants ${f.ph[0]}–${f.ph[1]}.${lvl === "meh" ? " Close enough that captive-bred stock usually adapts — stability matters more than the exact number." : " That's a long way out, and chasing pH with chemicals causes more deaths than the wrong pH does."}` });
+  }
+  if (typeof t.gh === "number" && f.gh) {
+    const lvl = band(t.gh, f.gh, 4);
+    out.push({ level: lvl, ico: "💧", text: lvl === "ok"
+      ? `Hardness works: your ${t.gh} dGH sits inside its ${f.gh[0]}–${f.gh[1]} dGH range.`
+      : `Your water is ${t.gh} dGH; this fish wants ${f.gh[0]}–${f.gh[1]} dGH.${lvl === "meh" ? " Workable, but it affects long-term health and breeding." : " Getting there means changing your source water — an RO unit or remineralising — which is a real ongoing job, not a one-off." }` });
+  }
+  // chemistry collisions with the invertebrates already in the tank.
+  // Ranges that merely touch are a collision in practice: you'd have to hold the
+  // water on a knife edge to suit both.
+  const overlap = (a, b) => Math.min(a[1], b[1]) - Math.max(a[0], b[0]);
+  if (t.snail && f.ph) {
+    const o = overlap(f.ph, SNAIL_PH);
+    if (o <= 0) out.push({ level: "no", ico: "🐌", text: `This fish wants pH ${f.ph[0]}–${f.ph[1]}; a mystery snail needs ${SNAIL_PH[0]}+ or its shell pits and erodes. No workable overlap — fish-versus-snail chemistry collision.` });
+    else if (o < 0.3) out.push({ level: "meh", ico: "🐌", text: `Only a sliver of pH suits both (around ${Math.max(f.ph[0], SNAIL_PH[0])}). Doable, but you'd be holding the water on a knife edge.` });
+  }
+  if (t.snail && f.gh) {
+    const o = overlap(f.gh, SNAIL_GH);
+    if (o <= 0) out.push({ level: "no", ico: "🐌", text: `This fish wants ${f.gh[0]}–${f.gh[1]} dGH; a mystery snail needs ${SNAIL_GH[0]}+ dGH to build its shell. You can't give both what they need in one tank.` });
+    else if (o < 2) out.push({ level: "meh", ico: "🐌", text: `Barely any hardness range suits both this fish and the snail — worth deciding which one the tank is really for.` });
+  }
+  if (t.shrimp && f.gh) {
+    const o = overlap(f.gh, sh.gh);
+    if (o <= 0) out.push({ level: "no", ico: "🦐", text: `No shared hardness with your ${sh.label} (they want ${sh.gh[0]}–${sh.gh[1]} dGH) — shrimp need GH to moult properly.` });
+    else if (o < 2) out.push({ level: "meh", ico: "🦐", text: `Very little hardness range suits both this fish and your ${sh.label} — moulting suffers when GH runs low.` });
   }
   // crew fish: shared temperature windows (pairwise honesty about what we don't know comes last)
   const crew = (t.crewFish || []).map(id => allFish().find(x => x.id === id)).filter(c => c && c.id !== f.id);
@@ -1119,6 +1268,9 @@ function renderDetail() {
       <span class="spec"><b>Temp</b> ${f.temp[0]}–${f.temp[1]}°C</span>
       <span class="spec"><b>Group</b> ${esc(f.group)}</span>
       <span class="spec"><b>Min tank</b> ~${f.minL}L</span>
+      ${f.ph ? `<span class="spec"><b>pH</b> ${f.ph[0]}–${f.ph[1]}</span>` : ""}
+      ${f.gh ? `<span class="spec"><b>GH</b> ${f.gh[0]}–${f.gh[1]} dGH</span>` : ""}
+      ${f.level ? `<span class="spec"><b>Swims</b> ${esc(fishLevel(f))}</span>` : ""}
     </div>
     <p class="blurb">${esc(f.blurb)}</p>
     ${f.teach ? `<div class="teach"><b>Thinking tool:</b> ${esc(f.teach)}</div>` : ""}
@@ -1183,7 +1335,18 @@ function renderInvertNote() {
     windowTxt = ` Everyone's shared comfort window: ${lo}–${hi}°C`;
     windowTxt += (t.temp >= lo && t.temp <= hi) ? ` (your ${t.temp}°C is inside it ✓).` : ` — but your heater is at ${t.temp}°C, outside it!`;
   }
-  $("invertNote").textContent = `Your existing crew sets the frame: ${bits.join(" · ")}.${windowTxt} Any new fish that forces the heater outside this window is a conflict with the crew, not just a hard fish.`;
+  let chem = "";
+  if (typeof t.gh === "number" || typeof t.ph === "number" || typeof t.kh === "number") {
+    const cbits = [];
+    if (t.snail && typeof t.gh === "number" && t.gh < SNAIL_GH[0]) cbits.push(`🐌 your ${t.gh} dGH is softer than a mystery snail's shell wants (${SNAIL_GH[0]}+)`);
+    if (t.snail && typeof t.ph === "number" && t.ph < SNAIL_PH[0]) cbits.push(`🐌 pH ${t.ph} is acidic for a snail shell (${SNAIL_PH[0]}+ is safer)`);
+    if (t.shrimp && typeof t.gh === "number" && t.gh < sh.gh[0]) cbits.push(`🦐 ${t.gh} dGH is low for ${sh.label} moulting (${sh.gh[0]}–${sh.gh[1]})`);
+    if (typeof t.kh === "number" && t.kh < SNAIL_KH_MIN) cbits.push(`⚠ KH ${t.kh} is low, so pH can swing fast — the swings hurt more than the number itself`);
+    chem = cbits.length ? ` Chemistry: ${cbits.join(" · ")}.` : " Chemistry looks settled for the crew you have.";
+  } else {
+    chem = " Water chemistry is blank — add pH, GH and KH above and every fish gets checked on chemistry too.";
+  }
+  $("invertNote").textContent = `Your existing crew sets the frame: ${bits.join(" · ")}.${windowTxt} Any new fish that forces the heater outside this window is a conflict with the crew, not just a hard fish.${chem}`;
 }
 function renderCrew() {
   const box = $("crewFishBox"), t = state.tank;
@@ -1218,6 +1381,12 @@ function aiPrompt(name) {
   "group": "how many to keep together",
   "temp": [min, max],
   "minL": 60,
+  "ph": [min, max],
+  "gh": [min, max],
+  "cm": adult length in cm as a number,
+  "level": "top | mid | bottom | all",
+  "minGroup": smallest sensible number to keep together,
+  "load": 0.8 for a slim tidy fish, 1.0 normal, 1.3 for a messy one like a cichlid or puffer,
   "shrimp": "safe | shrimplets | risky | no",
   "snail": "safe | risky | no",
   "blurb": "2 honest sentences about the fish",
@@ -1227,7 +1396,20 @@ function aiPrompt(name) {
   ]
 }
 
-Rules: temp is degrees C as numbers; minL is tank litres as a number; 2 to 4 problems; "setup" = solve once before buying, "habit" = an ongoing routine, "risk" = can only be watched for and planned around. Be honest about conflicts with cherry shrimp and a mystery snail. Don't soften real problems and don't invent fake ones.`;
+Rules: temp is degrees C as numbers; minL is tank litres as a number; ph is the pH range and gh is hardness in dGH; 2 to 4 problems; "setup" = solve once before buying, "habit" = an ongoing routine, "risk" = can only be watched for and planned around. Be honest about conflicts with cherry shrimp and a mystery snail. Don't soften real problems and don't invent fake ones.`;
+}
+/* Forgiving JSON reader: iPads turn " into curly quotes, chat apps add prose or code
+   fences around the answer, and models sometimes leave a trailing comma. */
+function looseParseJSON(text) {
+  let s = String(text == null ? "" : text);
+  s = s.replace(/[“”„‟″]/g, '"')
+       .replace(/[‘’‚‛′]/g, "'")
+       .replace(/[   ]/g, " ")
+       .replace(/[​-‍﻿]/g, "");
+  const start = s.indexOf("{"), end = s.lastIndexOf("}");
+  if (start >= 0 && end > start) s = s.slice(start, end + 1);
+  s = s.replace(/,\s*([}\]])/g, "$1");
+  return JSON.parse(s);
 }
 function validateFish(o) {
   const errs = [];
@@ -1254,8 +1436,20 @@ function normaliseFish(o, keepId) {
     minL: Math.round(+o.minL),
     shrimp: o.shrimp, snail: o.snail,
     blurb: String(o.blurb || ""), teach: String(o.teach || ""),
+    ph: pairOrNull(o.ph), gh: pairOrNull(o.gh),
+    cm: +o.cm > 0 ? +o.cm : undefined,
+    level: ["top", "mid", "bottom", "all"].includes(o.level) ? o.level : undefined,
+    minGroup: +o.minGroup > 0 ? Math.round(+o.minGroup) : undefined,
+    load: +o.load > 0 ? +o.load : undefined,
     problems: o.problems.slice(0, 5).map(p => ({ type: p.type, title: String(p.title), why: String(p.why || ""), solve: String(p.solve || "") }))
   };
+}
+/* optional ranges: keep them only if they're a usable pair of numbers */
+function pairOrNull(v) {
+  if (!Array.isArray(v) || v.length !== 2) return undefined;
+  const a = +v[0], b = +v[1];
+  if (isNaN(a) || isNaN(b)) return undefined;
+  return [Math.min(a, b), Math.max(a, b)];
 }
 function saveCustomFish(fish, editId) {
   if (editId) {
@@ -1342,9 +1536,16 @@ function renderAddPanel() {
       setTimeout(() => { $("copyPromptBtn").textContent = "📋 Copy prompt"; }, 1500);
     });
     $("aiImportBtn").addEventListener("click", () => {
-      const raw = $("ai-paste").value.trim().replace(/^```(json)?/i, "").replace(/```$/, "").trim();
+      const raw = $("ai-paste").value;
       let obj = null, msg = $("aiMsg");
-      try { obj = JSON.parse(raw); } catch (e) { msg.textContent = "That doesn't parse as JSON — make sure you copied the whole { ... } block."; msg.hidden = false; return; }
+      try { obj = looseParseJSON(raw); }
+      catch (e) {
+        const seen = raw.trim().slice(0, 40).replace(/\s+/g, " ");
+        msg.textContent = !raw.trim()
+          ? "Nothing pasted yet — paste the AI's answer into the box above."
+          : `Couldn't read that as JSON. Make sure you copied the AI's ANSWER (starts with { ) and not the prompt. It starts: "${seen}…"`;
+        msg.hidden = false; return;
+      }
       const errs = validateFish(obj);
       if (errs.length) { msg.textContent = "Nearly! " + errs.join(" "); msg.hidden = false; return; }
       saveCustomFish(normaliseFish(obj));
@@ -1475,10 +1676,12 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v8";
+const APP_VERSION = "v10";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
-  return `${APP_VERSION} · ${state.view === "care" ? "My Tank" : "Fish Finder"}${f ? " · looking at " + f.name : ""} · ${t.litres}L ${t.temp}°C${t.shrimp ? " 🦐" : ""}${t.snail ? " 🐌" : ""}`;
+  const tabName = { care: "My Tank", stock: "Stocking" }[state.view] || "Fish Finder";
+  const chem = [typeof t.ph === "number" ? "pH" + t.ph : "", typeof t.gh === "number" ? t.gh + "GH" : "", typeof t.kh === "number" ? t.kh + "KH" : ""].filter(Boolean).join(" ");
+  return `${APP_VERSION} · ${tabName}${f ? " · looking at " + f.name : ""} · ${t.litres}L ${t.temp}°C${chem ? " " + chem : ""}${t.shrimp ? " 🦐" : ""}${t.snail ? " 🐌" : ""}`;
 }
 function isAppleTouch() { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
 function smsUrl(phone, msg) { return "sms:" + phone.replace(/[^\d+]/g, "") + (isAppleTouch() ? "&" : "?") + "body=" + encodeURIComponent(msg); }
@@ -1510,14 +1713,124 @@ function renderFbPrev() {
   }));
 }
 
+/* ---------------- Stocking ----------------
+   There is no agreed formula for this in the hobby — "an inch per gallon" is a
+   rule of thumb that falls apart on both ends. So: a transparent model, shown in
+   full, calibrated so ordinary community stockings land in a sensible band.
+     load  = adult cm ^ 1.3 × messiness × quantity
+     room  = litres × filtration × planting
+   The number is a conversation starter, not a verdict. */
+const FILTRATION_F = { under: 0.75, standard: 1.0, over: 1.25 };
+const PLANTING_F = { bare: 0.95, some: 1.0, heavy: 1.15 };
+const ROOM_PER_LITRE = 1.6;
+function stockLoadOf(f, qty) { return Math.pow(fishCm(f), 1.3) * fishLoad(f) * qty; }
+function stockingModel() {
+  const t = state.tank, s = state.stock;
+  const rows = s.planned.map(p => {
+    const f = allFish().find(x => x.id === p.id);
+    if (!f) return null;
+    return { f, qty: p.qty, load: stockLoadOf(f, p.qty) };
+  }).filter(Boolean);
+  const totalLoad = rows.reduce((a, r) => a + r.load, 0);
+  const fF = FILTRATION_F[s.filtration] || 1, pF = PLANTING_F[s.planting] || 1;
+  const room = Math.max(1, t.litres * ROOM_PER_LITRE * fF * pF);
+  const pct = Math.round((totalLoad / room) * 100);
+  const levels = { top: 0, mid: 0, bottom: 0, all: 0 };
+  rows.forEach(r => { levels[fishLevel(r.f)] += r.load; });
+  const warnings = [];
+  rows.forEach(r => {
+    const need = fishMinGroup(r.f);
+    if (r.qty < need) warnings.push({ lvl: "meh", text: `${r.f.name}: ${r.qty} is under its working group of ${need} — shoaling fish kept short stay stressed and hide.` });
+    if (r.f.solo && r.qty > 1) warnings.push({ lvl: "no", text: `${r.f.name}: keep one. More than one in a tank this size means fighting, not company.` });
+    if (t.litres < r.f.minL) warnings.push({ lvl: "no", text: `${r.f.name} needs roughly ${r.f.minL}L and your tank is ${t.litres}L.` });
+  });
+  const swimTotal = totalLoad - levels.all;
+  if (swimTotal > 0) {
+    ["top", "mid", "bottom"].forEach(k => {
+      if (levels[k] / swimTotal > 0.65 && rows.length > 1) {
+        warnings.push({ lvl: "meh", text: `Most of this stocking sits in the ${k} of the tank. Spreading across top, middle and bottom uses the space better and keeps the tank looking alive.` });
+      }
+    });
+  }
+  return { rows, totalLoad, room, pct, levels, warnings, fF, pF };
+}
+function renderStocking() {
+  const t = state.tank, s = state.stock, m = stockingModel();
+  $("stTankMini").textContent = `${t.litres} L · ${t.temp}°C`;
+  $("stFiltration").value = s.filtration;
+  $("stPlanting").value = s.planting;
+  const opts = allFish().filter(f => !s.planned.some(p => p.id === f.id))
+    .map(f => `<option value="${f.id}">${esc(f.emoji)} ${esc(f.name)}</option>`).join("");
+  $("stockAdd").innerHTML = `<select class="crew-select" id="stAddSel" style="max-width:20rem"><option value="">➕ Add a fish to the plan…</option>${opts}</select>`;
+  $("stAddSel").addEventListener("change", () => {
+    const v = $("stAddSel").value; if (!v) return;
+    const f = allFish().find(x => x.id === v);
+    s.planned.push({ id: v, qty: fishMinGroup(f) });
+    save(); renderStocking();
+  });
+  $("stockList").innerHTML = m.rows.map(r => `
+    <div class="stock-row">
+      <span class="sr-emoji">${esc(r.f.emoji)}</span>
+      <span><span class="sr-name">${esc(r.f.name)}</span><br>
+        <span class="sr-meta">${fishCm(r.f)} cm adult · ${esc(fishLevel(r.f))} · group of ${fishMinGroup(r.f)}+</span></span>
+      <input type="number" min="1" max="200" value="${r.qty}" data-qty="${r.f.id}" aria-label="How many">
+      <button class="mini rm" data-rmstock="${r.f.id}">remove</button>
+    </div>`).join("") || `<p class="list-note">Nothing planned yet — add the fish you're thinking about above, including the ones you already keep.</p>`;
+  $("stockList").querySelectorAll("[data-qty]").forEach(el => el.addEventListener("input", () => {
+    const p = s.planned.find(x => x.id === el.dataset.qty);
+    p.qty = Math.max(1, Math.min(200, Math.round(+el.value) || 1));
+    save(); renderStockResult();
+  }));
+  $("stockList").querySelectorAll("[data-rmstock]").forEach(b => b.addEventListener("click", () => {
+    s.planned = s.planned.filter(x => x.id !== b.dataset.rmstock);
+    save(); renderStocking();
+  }));
+  renderStockResult();
+}
+function renderStockResult() {
+  const m = stockingModel();
+  if (!m.rows.length) { $("stockResult").innerHTML = ""; return; }
+  const cls = m.pct <= 85 ? "g-ok" : m.pct <= 100 ? "g-warn" : "g-bad";
+  let verdict;
+  if (m.pct <= 60) verdict = "Room to spare. You could add another group — or leave the space and enjoy how clean the water stays.";
+  else if (m.pct <= 85) verdict = "A comfortable, well-used tank. This is the sweet spot.";
+  else if (m.pct <= 100) verdict = "Full. Doable if you keep the water changes up, but there's no room for anything else.";
+  else verdict = "Over. Something has to come out, the filtration has to go up, or the tank has to get bigger.";
+  const swimTotal = m.totalLoad - m.levels.all;
+  const lvlPill = k => {
+    const share = swimTotal > 0 ? Math.round((m.levels[k] / swimTotal) * 100) : 0;
+    return `<span class="level-pill">${k}: ${share}%</span>`;
+  };
+  $("stockResult").innerHTML = `
+    <div class="gauge"><span class="${cls}" style="width:${Math.min(100, m.pct)}%"></span></div>
+    <div class="stock-pct">${m.pct}% stocked</div>
+    <div class="stock-verdict">${verdict}</div>
+    <div class="levels">${["top", "mid", "bottom"].map(lvlPill).join("")}${m.levels.all > 0 ? '<span class="level-pill">plus grazers</span>' : ""}</div>
+    ${m.warnings.map(w => `<div class="stock-warn ${w.lvl === "no" ? "compat-row no" : "compat-row meh"}">${esc(w.text)}</div>`).join("")}
+    <details class="workings">
+      <summary>Show the workings (and why this is only a guide)</summary>
+      <p>Each fish's load is its <b>adult length in cm to the power 1.3</b>, times a messiness factor (a cichlid fouls more water than a tetra the same length), times how many you keep. Your tank's room is <b>${state.tank.litres} L × 1.6</b>, adjusted by filtration (×${m.fF}) and planting (×${m.pF}).</p>
+      <table>
+        <tr><th>Fish</th><th>Qty</th><th>Adult</th><th>Load</th></tr>
+        ${m.rows.map(r => `<tr><td>${esc(r.f.name)}</td><td>${r.qty}</td><td>${fishCm(r.f)} cm</td><td>${Math.round(r.load)}</td></tr>`).join("")}
+        <tr><td colspan="3"><b>Total load</b></td><td><b>${Math.round(m.totalLoad)}</b></td></tr>
+        <tr><td colspan="3"><b>Room in your tank</b></td><td><b>${Math.round(m.room)}</b></td></tr>
+      </table>
+      <p><b>Why it's a guide, not a rule:</b> there is no agreed stocking formula in the hobby — the old "inch per gallon" breaks down at both ends. This model ignores how territorial a fish is, how much you feed, how often you change water, and whether the tank is tall or long. Use it to spot the obvious, then check a real stocking against two sources before you buy.</p>
+    </details>`;
+}
+
 /* ---------------- Tabs ---------------- */
 function setView(v) {
   state.view = v; save();
   $("viewFinder").hidden = v !== "finder";
   $("viewCare").hidden = v !== "care";
+  $("viewStock").hidden = v !== "stock";
   $("tabFinder").classList.toggle("active", v === "finder");
   $("tabCare").classList.toggle("active", v === "care");
+  $("tabStock").classList.toggle("active", v === "stock");
   if (v === "care") renderTasks();
+  if (v === "stock") renderStocking();
 }
 
 /* ---------------- Wiring ---------------- */
@@ -1540,6 +1853,15 @@ function syncToggle(el, key) {
 }
 syncToggle($("tShrimp"), "shrimp");
 syncToggle($("tSnail"), "snail");
+["ph", "gh", "kh"].forEach(key => {
+  const el = $({ ph: "wpH", gh: "wGH", kh: "wKH" }[key]);
+  if (typeof state.tank[key] === "number") el.value = state.tank[key];
+  el.addEventListener("input", () => {
+    const v = el.value.trim();
+    state.tank[key] = v === "" || isNaN(+v) ? null : +v;
+    save(); renderInvertNote(); renderTankMini(); refreshFinder();
+  });
+});
 $("shrimpType").value = state.tank.shrimpType;
 $("shrimpType").addEventListener("change", () => {
   state.tank.shrimpType = $("shrimpType").value === "amano" ? "amano" : "neo";
@@ -1560,13 +1882,16 @@ $("modeGrid").addEventListener("click", () => { state.finderMode = "grid"; save(
 $("modeSwipe").addEventListener("click", () => { state.finderMode = "swipe"; save(); renderBrowse(); });
 $("tabFinder").addEventListener("click", () => setView("finder"));
 $("tabCare").addEventListener("click", () => setView("care"));
+$("tabStock").addEventListener("click", () => setView("stock"));
+$("stFiltration").addEventListener("change", () => { state.stock.filtration = $("stFiltration").value; save(); renderStockResult(); });
+$("stPlanting").addEventListener("change", () => { state.stock.planting = $("stPlanting").value; save(); renderStockResult(); });
 $("addTaskBtn").addEventListener("click", () => { taskFormFor = null; renderTaskForm(); });
 $("icsBtn").addEventListener("click", () => download("charlies-fish-routine.ics", buildICS(), "text/calendar"));
 $("exportBtn").addEventListener("click", () => {
   download("charlies-fishy-dataset.json", JSON.stringify({
     app: "charlies-fish-finder", version: 1, exported: new Date().toISOString(),
     tank: state.tank, verdicts: state.verdicts, custom: state.custom, tasks: state.tasks, feedback: state.feedback,
-    shortlist: state.shortlist, finderMode: state.finderMode, fbPhone: state.fbPhone
+    shortlist: state.shortlist, finderMode: state.finderMode, fbPhone: state.fbPhone, stock: state.stock
   }, null, 2), "application/json");
   dataMsg("Saved! The file is in your Downloads — keep it somewhere safe (or AirDrop it).", true);
 });
@@ -1607,10 +1932,12 @@ $("importFile").addEventListener("change", () => {
       state.feedback = Array.isArray(d.feedback) ? d.feedback : [];
       state.shortlist = Array.isArray(d.shortlist) ? d.shortlist : [];
       state.fbPhone = typeof d.fbPhone === "string" ? d.fbPhone : "";
+      state.stock = d.stock && typeof d.stock === "object" ? d.stock : null;
       if (d.finderMode === "swipe" || d.finderMode === "grid") state.finderMode = d.finderMode;
       state.sel = null; addMode = null; swipeIdx = 0; gridFilter = "all"; migrateTank(); save();
       $("litres").value = state.tank.litres; $("temp").value = state.tank.temp; $("tempOut").textContent = state.tank.temp + "°C";
       $("shrimpType").value = state.tank.shrimpType;
+      ["ph", "gh", "kh"].forEach(k => { $({ ph: "wpH", gh: "wGH", kh: "wKH" }[k]).value = typeof state.tank[k] === "number" ? state.tank[k] : ""; });
       ["tShrimp", "tSnail"].forEach((id, i) => {
         const el = $(id), key = i === 0 ? "shrimp" : "snail";
         el.querySelector("input").checked = state.tank[key]; el.classList.toggle("on", state.tank[key]);
