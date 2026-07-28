@@ -575,26 +575,46 @@
       <p class="list-note">Build the tank you're thinking about and see how full it gets. This is a <em>rough guide</em>, not a rule — the workings are shown so you can argue with them.</p>
       <div class="tank-grid">
         <div class="tank-field">
-          <label for="stFiltration">Filtration</label>
-          <select id="stFiltration" class="crew-select">
-            <option value="under">Light (under-filtered)</option>
-            <option value="standard">Standard filter</option>
-            <option value="over">Strong (2×+ turnover)</option>
+          <label for="stFilterType">Filter type</label>
+          <select id="stFilterType" class="crew-select">
+            <option value="sponge">Sponge / internal</option>
+            <option value="hob">Hang-on-back</option>
+            <option value="canister">Canister</option>
+            <option value="sump">Sump</option>
           </select>
         </div>
         <div class="tank-field">
-          <label for="stPlanting">Planting density</label>
-          <select id="stPlanting" class="crew-select">
-            <option value="bare">Bare / few plants</option>
-            <option value="some">Some plants</option>
-            <option value="heavy">Heavily planted</option>
+          <label for="stLph">Flow rate (litres/hour)</label>
+          <input type="number" id="stLph" min="0" max="10000" step="10" placeholder="on the box">
+        </div>
+        <div class="tank-field">
+          <label for="stMedia">What's in the filter?</label>
+          <select id="stMedia" class="crew-select">
+            <option value="light">Mostly floss / carbon</option>
+            <option value="some">Some bio media</option>
+            <option value="packed">Packed with bio media</option>
           </select>
+        </div>
+        <div class="tank-field">
+          <label for="stPlanting">Planting</label>
+          <select id="stPlanting" class="crew-select">
+            <option value="none">No plants</option>
+            <option value="few">A few plants</option>
+            <option value="some">Moderately planted</option>
+            <option value="dense">Densely planted</option>
+            <option value="jungle">Jungle</option>
+          </select>
+        </div>
+        <div class="tank-field">
+          <label>&nbsp;</label>
+          <label class="crew-toggle" id="stFastWrap"><input type="checkbox" id="stFast"> 🌿 Mostly fast growers</label>
         </div>
         <div class="tank-field">
           <label>Tank</label>
           <span class="tank-mini" id="stTankMini"></span>
         </div>
       </div>
+      <div id="turnoverNote"></div>
       <div id="stockAdd" class="btn-row"></div>
       <div id="stockList"></div>
       <div id="stockResult"></div>
@@ -871,8 +891,17 @@ function migrateTank() {
   if (state.tank.shrimpType !== "amano") state.tank.shrimpType = "neo";
   // null means "not tested yet" — chemistry checks stay silent rather than guessing
   ["ph", "gh", "kh"].forEach(k => { if (typeof state.tank[k] !== "number") state.tank[k] = null; });
-  if (!state.stock || typeof state.stock !== "object") state.stock = { filtration: "standard", planting: "some", planned: [] };
+  if (!state.stock || typeof state.stock !== "object") state.stock = {};
   if (!Array.isArray(state.stock.planned)) state.stock.planned = [];
+  // literal lists, not the factor tables below — this runs before those consts exist
+  const s = state.stock;
+  if (!["sponge", "hob", "canister", "sump"].includes(s.filterType)) s.filterType = "hob";
+  if (!["light", "some", "packed"].includes(s.media)) s.media = "some";
+  if (typeof s.lph !== "number" || !(s.lph > 0)) s.lph = null;
+  if (typeof s.fastGrowers !== "boolean") s.fastGrowers = false;
+  // v10 used three planting levels; map the old values onto the new five
+  if (!["none", "few", "some", "dense", "jungle"].includes(s.planting))
+    s.planting = ({ bare: "few", some: "some", heavy: "dense" })[s.planting] || "some";
 }
 migrateTank();
 function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -1306,7 +1335,11 @@ function renderDetail() {
       state.custom = state.custom.filter(x => x.id !== f.id);
       delete state.verdicts[f.id];
       state.shortlist = state.shortlist.filter(x => x !== f.id);
-      state.sel = null; save(); backToBrowse();
+      state.tank.crewFish = (state.tank.crewFish || []).filter(x => x !== f.id);
+      state.stock.planned = (state.stock.planned || []).filter(p => p.id !== f.id);
+      state.sel = null; save();
+      renderCrew(); renderInvertNote(); renderTankMini();
+      backToBrowse();
     });
   }
   document.querySelectorAll(".verdict-btns").forEach(box =>
@@ -1456,7 +1489,9 @@ function saveCustomFish(fish, editId) {
     const i = state.custom.findIndex(x => x.id === editId);
     if (i >= 0) state.custom[i] = fish; else state.custom.push(fish);
   } else state.custom.push(fish);
-  addMode = null; save(); openDetail(fish.id);
+  addMode = null; save();
+  renderCrew();   // the crew picker's list is built from allFish(); rebuild it or his new fish never appears
+  openDetail(fish.id);
 }
 function probBlock(i, p) {
   p = p || {};
@@ -1676,7 +1711,7 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v10";
+const APP_VERSION = "v11";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   const tabName = { care: "My Tank", stock: "Stocking" }[state.view] || "Fish Finder";
@@ -1720,9 +1755,36 @@ function renderFbPrev() {
      load  = adult cm ^ 1.3 × messiness × quantity
      room  = litres × filtration × planting
    The number is a conversation starter, not a verdict. */
-const FILTRATION_F = { under: 0.75, standard: 1.0, over: 1.25 };
-const PLANTING_F = { bare: 0.95, some: 1.0, heavy: 1.15 };
+/* Turnover bands. Charlie was right that the old model called 2x "strong" — the
+   usual community-tank target is 4-6x, and 6-10x for messy or heavy stock. */
+const TURNOVER_BANDS = [
+  { max: 2,        f: 0.70, label: "under-filtered",  say: "Under 2× an hour is not enough for a stocked tank." },
+  { max: 4,        f: 0.85, label: "light",           say: "2–4× works for a lightly stocked, well-planted tank." },
+  { max: 6,        f: 1.00, label: "good",            say: "4–6× is the usual target for a community tank." },
+  { max: 10,       f: 1.15, label: "strong",          say: "6–10× is strong — good for messy fish and heavy stocking." },
+  { max: Infinity, f: 1.18, label: "very strong",     say: "Over 10× is a lot of flow. Fine for the filter, but check your calm-water fish aren't being blown around." }
+];
+const FILTER_TYPE_F = { sponge: 0.85, hob: 0.95, canister: 1.10, sump: 1.20 };
+const MEDIA_F = { light: 0.90, some: 1.0, packed: 1.10 };
+const PLANTING_F = { none: 0.92, few: 0.97, some: 1.03, dense: 1.10, jungle: 1.16 };
 const ROOM_PER_LITRE = 1.6;
+function turnoverOf() {
+  const lph = +state.stock.lph;
+  if (!(lph > 0) || !(state.tank.litres > 0)) return null;
+  return lph / state.tank.litres;
+}
+function filtrationFactor() {
+  const s = state.stock, t = turnoverOf();
+  const base = t == null ? (FILTER_TYPE_F[s.filterType] || 1) : TURNOVER_BANDS.find(b => t < b.max).f;
+  const typeNudge = t == null ? 1 : (FILTER_TYPE_F[s.filterType] || 1) * 0.5 + 0.5; // type matters less once real flow is known
+  const f = base * typeNudge * (MEDIA_F[s.media] || 1);
+  return Math.max(0.6, Math.min(1.45, +f.toFixed(3)));
+}
+function plantingFactor() {
+  const s = state.stock;
+  const f = (PLANTING_F[s.planting] || 1) * (s.fastGrowers && s.planting !== "none" ? 1.05 : 1);
+  return Math.max(0.85, Math.min(1.25, +f.toFixed(3)));
+}
 function stockLoadOf(f, qty) { return Math.pow(fishCm(f), 1.3) * fishLoad(f) * qty; }
 function stockingModel() {
   const t = state.tank, s = state.stock;
@@ -1732,7 +1794,7 @@ function stockingModel() {
     return { f, qty: p.qty, load: stockLoadOf(f, p.qty) };
   }).filter(Boolean);
   const totalLoad = rows.reduce((a, r) => a + r.load, 0);
-  const fF = FILTRATION_F[s.filtration] || 1, pF = PLANTING_F[s.planting] || 1;
+  const fF = filtrationFactor(), pF = plantingFactor();
   const room = Math.max(1, t.litres * ROOM_PER_LITRE * fF * pF);
   const pct = Math.round((totalLoad / room) * 100);
   const levels = { top: 0, mid: 0, bottom: 0, all: 0 };
@@ -1752,13 +1814,44 @@ function stockingModel() {
       }
     });
   }
-  return { rows, totalLoad, room, pct, levels, warnings, fF, pF };
+
+  /* Water — checks the plan against the tank he actually has, and the planned fish
+     against each other. A group that has no shared water is unkeepable however
+     roomy the tank is, so this matters more than the percentage. */
+  const near = (v, range, slack) => v >= range[0] - slack && v <= range[1] + slack;
+  rows.forEach(r => {
+    if (typeof t.ph === "number" && r.f.ph && !near(t.ph, r.f.ph, 0.5))
+      warnings.push({ lvl: "meh", text: `${r.f.name} wants pH ${r.f.ph[0]}–${r.f.ph[1]} and your tank is ${t.ph}.` });
+    if (typeof t.gh === "number" && r.f.gh && !near(t.gh, r.f.gh, 4))
+      warnings.push({ lvl: "meh", text: `${r.f.name} wants ${r.f.gh[0]}–${r.f.gh[1]} dGH and your tank is ${t.gh} dGH.` });
+  });
+  const shared = (key) => {
+    const have = rows.filter(r => r.f[key]);
+    if (have.length < 2) return null;
+    const lo = Math.max(...have.map(r => r.f[key][0])), hi = Math.min(...have.map(r => r.f[key][1]));
+    return { lo, hi, ok: lo <= hi, have };
+  };
+  const sTemp = shared("temp"), sPh = shared("ph"), sGh = shared("gh");
+  if (sTemp && !sTemp.ok) warnings.push({ lvl: "no", text: `These fish have no shared temperature. ${sTemp.have.map(r => `${r.f.name} ${r.f.temp[0]}–${r.f.temp[1]}°C`).join("; ")}. One group has to go.` });
+  else if (sTemp && (t.temp < sTemp.lo || t.temp > sTemp.hi)) warnings.push({ lvl: "meh", text: `They only overlap at ${sTemp.lo}–${sTemp.hi}°C, and your heater is at ${t.temp}°C.` });
+  if (sPh && !sPh.ok) warnings.push({ lvl: "no", text: `No pH suits all of these at once — you'd be picking which ones to compromise. ${sPh.have.map(r => `${r.f.name} ${r.f.ph[0]}–${r.f.ph[1]}`).join("; ")}.` });
+  else if (sPh && sPh.hi - sPh.lo < 0.4) warnings.push({ lvl: "meh", text: `These only share pH ${sPh.lo}–${sPh.hi} — a window that narrow isn't really holdable. Something here is a soft-water fish sitting next to a hard-water one.` });
+  if (sGh && !sGh.ok) warnings.push({ lvl: "no", text: `No water hardness suits all of these at once. ${sGh.have.map(r => `${r.f.name} ${r.f.gh[0]}–${r.f.gh[1]} dGH`).join("; ")}.` });
+  else if (sGh && sGh.hi - sGh.lo < 3) warnings.push({ lvl: "meh", text: `They only share ${sGh.lo}–${sGh.hi} dGH. Technically possible, but you'd be holding the hardness on a knife edge to keep everyone happy.` });
+  const noChem = typeof t.ph !== "number" && typeof t.gh !== "number";
+  return { rows, totalLoad, room, pct, levels, warnings, fF, pF, sTemp, sPh, sGh, noChem };
 }
 function renderStocking() {
   const t = state.tank, s = state.stock, m = stockingModel();
-  $("stTankMini").textContent = `${t.litres} L · ${t.temp}°C`;
-  $("stFiltration").value = s.filtration;
+  const chem = [typeof t.ph === "number" ? "pH " + t.ph : "", typeof t.gh === "number" ? t.gh + " GH" : "", typeof t.kh === "number" ? t.kh + " KH" : ""].filter(Boolean).join(" · ");
+  $("stTankMini").textContent = `${t.litres} L · ${t.temp}°C${chem ? " · " + chem : ""}`;
+  $("stFilterType").value = s.filterType;
+  $("stMedia").value = s.media;
   $("stPlanting").value = s.planting;
+  $("stLph").value = s.lph > 0 ? s.lph : "";
+  $("stFast").checked = !!s.fastGrowers;
+  $("stFastWrap").classList.toggle("on", !!s.fastGrowers);
+  renderTurnover();
   const opts = allFish().filter(f => !s.planned.some(p => p.id === f.id))
     .map(f => `<option value="${f.id}">${esc(f.emoji)} ${esc(f.name)}</option>`).join("");
   $("stockAdd").innerHTML = `<select class="crew-select" id="stAddSel" style="max-width:20rem"><option value="">➕ Add a fish to the plan…</option>${opts}</select>`;
@@ -1787,6 +1880,17 @@ function renderStocking() {
   }));
   renderStockResult();
 }
+function renderTurnover() {
+  const t = turnoverOf(), box = $("turnoverNote");
+  if (t == null) {
+    box.innerHTML = `<p class="invert-note">Add your filter's litres per hour (it's on the box or the maker's site) and this works off real turnover instead of guessing from the filter type.</p>`;
+    return;
+  }
+  const band = TURNOVER_BANDS.find(b => t < b.max);
+  const lvl = band.f >= 1 ? "ok" : band.f >= 0.85 ? "meh" : "no";
+  box.innerHTML = `<div class="compat-row ${lvl}" style="margin-top:.6rem">
+    <span class="ico">🌀</span><span><b>${t.toFixed(1)}× turnover an hour — ${band.label}.</b> ${band.say}</span></div>`;
+}
 function renderStockResult() {
   const m = stockingModel();
   if (!m.rows.length) { $("stockResult").innerHTML = ""; return; }
@@ -1806,10 +1910,13 @@ function renderStockResult() {
     <div class="stock-pct">${m.pct}% stocked</div>
     <div class="stock-verdict">${verdict}</div>
     <div class="levels">${["top", "mid", "bottom"].map(lvlPill).join("")}${m.levels.all > 0 ? '<span class="level-pill">plus grazers</span>' : ""}</div>
+    ${m.noChem ? `<div class="stock-warn compat-row meh">No pH or GH entered on the My Tank screen, so this plan hasn't been checked on water chemistry — only size, temperature and space.</div>` : ""}
+    ${m.sPh && m.sPh.ok && m.sGh && m.sGh.ok ? `<div class="stock-warn compat-row ok">Water suits all of them: they overlap at pH ${m.sPh.lo}–${m.sPh.hi} and ${m.sGh.lo}–${m.sGh.hi} dGH.</div>` : ""}
     ${m.warnings.map(w => `<div class="stock-warn ${w.lvl === "no" ? "compat-row no" : "compat-row meh"}">${esc(w.text)}</div>`).join("")}
     <details class="workings">
       <summary>Show the workings (and why this is only a guide)</summary>
       <p>Each fish's load is its <b>adult length in cm to the power 1.3</b>, times a messiness factor (a cichlid fouls more water than a tetra the same length), times how many you keep. Your tank's room is <b>${state.tank.litres} L × 1.6</b>, adjusted by filtration (×${m.fF}) and planting (×${m.pF}).</p>
+      <p><b>Filtration</b> comes from real turnover when you've entered litres per hour — under 2× is under-filtered, 4–6× is the usual community target, 6–10× is strong for messy fish. Filter type and how much biological media you're running nudge it either way. <b>Planting</b> counts because plants take up nitrate directly; fast growers like hornwort and water sprite do far more of that than slow ones like anubias, which is what the fast-grower tick is for.</p>
       <table>
         <tr><th>Fish</th><th>Qty</th><th>Adult</th><th>Load</th></tr>
         ${m.rows.map(r => `<tr><td>${esc(r.f.name)}</td><td>${r.qty}</td><td>${fishCm(r.f)} cm</td><td>${Math.round(r.load)}</td></tr>`).join("")}
@@ -1883,8 +1990,19 @@ $("modeSwipe").addEventListener("click", () => { state.finderMode = "swipe"; sav
 $("tabFinder").addEventListener("click", () => setView("finder"));
 $("tabCare").addEventListener("click", () => setView("care"));
 $("tabStock").addEventListener("click", () => setView("stock"));
-$("stFiltration").addEventListener("change", () => { state.stock.filtration = $("stFiltration").value; save(); renderStockResult(); });
+$("stFilterType").addEventListener("change", () => { state.stock.filterType = $("stFilterType").value; save(); renderTurnover(); renderStockResult(); });
+$("stMedia").addEventListener("change", () => { state.stock.media = $("stMedia").value; save(); renderStockResult(); });
 $("stPlanting").addEventListener("change", () => { state.stock.planting = $("stPlanting").value; save(); renderStockResult(); });
+$("stLph").addEventListener("input", () => {
+  const v = +$("stLph").value;
+  state.stock.lph = v > 0 ? v : null;
+  save(); renderTurnover(); renderStockResult();
+});
+$("stFast").addEventListener("change", () => {
+  state.stock.fastGrowers = $("stFast").checked;
+  $("stFastWrap").classList.toggle("on", $("stFast").checked);
+  save(); renderStockResult();
+});
 $("addTaskBtn").addEventListener("click", () => { taskFormFor = null; renderTaskForm(); });
 $("icsBtn").addEventListener("click", () => download("charlies-fish-routine.ics", buildICS(), "text/calendar"));
 $("exportBtn").addEventListener("click", () => {
