@@ -1711,7 +1711,7 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v11";
+const APP_VERSION = "v12";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   const tabName = { care: "My Tank", stock: "Stocking" }[state.view] || "Fish Finder";
@@ -1766,12 +1766,40 @@ const TURNOVER_BANDS = [
 ];
 const FILTER_TYPE_F = { sponge: 0.85, hob: 0.95, canister: 1.10, sump: 1.20 };
 const MEDIA_F = { light: 0.90, some: 1.0, packed: 1.10 };
+/* Charlie's catch (v11 feedback): media does two opposite things at once, and
+   v11 only modelled one of them. More bio media = more biological capacity
+   (MEDIA_F above, which stays). But the same media is also an obstruction, so
+   the water actually moves slower — his example: 1000 lph on the box, about
+   750 once the baskets are full. The number on the box is measured with an
+   EMPTY canister and no hoses, so real turnover is always lower than rated.
+   MEDIA_FLOW_F derates the flow before turnover is worked out. */
+const MEDIA_FLOW_F = { light: 0.92, some: 0.85, packed: 0.75 };
+const MEDIA_FLOW_SAY = {
+  light: "running mostly floss and carbon",
+  some: "carrying some bio media",
+  packed: "packed with bio media"
+};
+/* Hoses and lift cost flow too: a canister on the floor is pushing water up
+   over a metre, a sponge filter is not. Rough, and the workings say so. */
+const TYPE_FLOW_F = { sponge: 1.0, hob: 0.95, canister: 0.85, sump: 0.90 };
 const PLANTING_F = { none: 0.92, few: 0.97, some: 1.03, dense: 1.10, jungle: 1.16 };
 const ROOM_PER_LITRE = 1.6;
-function turnoverOf() {
+/* Rated flow straight off the box, before any of the above is taken off. */
+function ratedLph() {
   const lph = +state.stock.lph;
-  if (!(lph > 0) || !(state.tank.litres > 0)) return null;
-  return lph / state.tank.litres;
+  return lph > 0 ? lph : null;
+}
+/* What the filter actually moves once it is full of media and plumbed in. */
+function actualLph() {
+  const rated = ratedLph();
+  if (rated == null) return null;
+  const s = state.stock;
+  return rated * (MEDIA_FLOW_F[s.media] || MEDIA_FLOW_F.some) * (TYPE_FLOW_F[s.filterType] || 1);
+}
+function turnoverOf() {
+  const actual = actualLph();
+  if (actual == null || !(state.tank.litres > 0)) return null;
+  return actual / state.tank.litres;
 }
 function filtrationFactor() {
   const s = state.stock, t = turnoverOf();
@@ -1888,8 +1916,14 @@ function renderTurnover() {
   }
   const band = TURNOVER_BANDS.find(b => t < b.max);
   const lvl = band.f >= 1 ? "ok" : band.f >= 0.85 ? "meh" : "no";
+  const rated = ratedLph(), actual = actualLph();
+  const lost = Math.round((1 - actual / rated) * 100);
   box.innerHTML = `<div class="compat-row ${lvl}" style="margin-top:.6rem">
-    <span class="ico">🌀</span><span><b>${t.toFixed(1)}× turnover an hour — ${band.label}.</b> ${band.say}</span></div>`;
+      <span class="ico">🌀</span><span><b>${t.toFixed(1)}× turnover an hour — ${band.label}.</b> ${band.say}</span></div>
+    ${lost > 0 ? `<div class="compat-row meh" style="margin-top:.4rem">
+      <span class="ico">🧱</span><span>The box says <b>${rated} L/h</b>, but that is measured with an empty filter and no hoses.
+      With yours ${esc(MEDIA_FLOW_SAY[state.stock.media] || "full of media")}${state.stock.filterType === "canister" ? " and pushing up a canister's hoses" : ""},
+      reckon on about <b>${Math.round(actual)} L/h</b> — roughly <b>${lost}% less</b>. That lower number is what the turnover above uses.</span></div>` : ""}`;
 }
 function renderStockResult() {
   const m = stockingModel();
@@ -1916,7 +1950,7 @@ function renderStockResult() {
     <details class="workings">
       <summary>Show the workings (and why this is only a guide)</summary>
       <p>Each fish's load is its <b>adult length in cm to the power 1.3</b>, times a messiness factor (a cichlid fouls more water than a tetra the same length), times how many you keep. Your tank's room is <b>${state.tank.litres} L × 1.6</b>, adjusted by filtration (×${m.fF}) and planting (×${m.pF}).</p>
-      <p><b>Filtration</b> comes from real turnover when you've entered litres per hour — under 2× is under-filtered, 4–6× is the usual community target, 6–10× is strong for messy fish. Filter type and how much biological media you're running nudge it either way. <b>Planting</b> counts because plants take up nitrate directly; fast growers like hornwort and water sprite do far more of that than slow ones like anubias, which is what the fast-grower tick is for.</p>
+      <p><b>Filtration</b> comes from real turnover when you've entered litres per hour — under 2× is under-filtered, 4–6× is the usual community target, 6–10× is strong for messy fish. <b>Media pulls in two directions at once:</b> more bio media means more bacteria and more biological capacity, but the same media blocks the water and slows the flow down, so the turnover drops. The box figure is measured with an empty filter and no hoses, so this knocks it down before working out turnover — packed with media is about 25% off, and a canister loses more again lifting water up its hoses. <b>Planting</b> counts because plants take up nitrate directly; fast growers like hornwort and water sprite do far more of that than slow ones like anubias, which is what the fast-grower tick is for.</p>
       <table>
         <tr><th>Fish</th><th>Qty</th><th>Adult</th><th>Load</th></tr>
         ${m.rows.map(r => `<tr><td>${esc(r.f.name)}</td><td>${r.qty}</td><td>${fishCm(r.f)} cm</td><td>${Math.round(r.load)}</td></tr>`).join("")}
@@ -1991,7 +2025,8 @@ $("tabFinder").addEventListener("click", () => setView("finder"));
 $("tabCare").addEventListener("click", () => setView("care"));
 $("tabStock").addEventListener("click", () => setView("stock"));
 $("stFilterType").addEventListener("change", () => { state.stock.filterType = $("stFilterType").value; save(); renderTurnover(); renderStockResult(); });
-$("stMedia").addEventListener("change", () => { state.stock.media = $("stMedia").value; save(); renderStockResult(); });
+// media now changes the real flow, so the turnover note has to redraw too
+$("stMedia").addEventListener("change", () => { state.stock.media = $("stMedia").value; save(); renderTurnover(); renderStockResult(); });
 $("stPlanting").addEventListener("change", () => { state.stock.planting = $("stPlanting").value; save(); renderStockResult(); });
 $("stLph").addEventListener("input", () => {
   const v = +$("stLph").value;
