@@ -586,6 +586,7 @@
         <div class="tank-field">
           <label for="stLph">Flow rate (litres/hour)</label>
           <input type="number" id="stLph" min="0" max="10000" step="10" placeholder="on the box">
+          <label class="crew-toggle" id="stMeasuredWrap" style="margin-top:.3rem"><input type="checkbox" id="stMeasured"> I measured this myself</label>
         </div>
         <div class="tank-field">
           <label for="stMedia">What's in the filter?</label>
@@ -898,6 +899,7 @@ function migrateTank() {
   if (!["sponge", "hob", "canister", "sump"].includes(s.filterType)) s.filterType = "hob";
   if (!["light", "some", "packed"].includes(s.media)) s.media = "some";
   if (typeof s.lph !== "number" || !(s.lph > 0)) s.lph = null;
+  if (typeof s.lphMeasured !== "boolean") s.lphMeasured = false;
   if (typeof s.fastGrowers !== "boolean") s.fastGrowers = false;
   // v10 used three planting levels; map the old values onto the new five
   if (!["none", "few", "some", "dense", "jungle"].includes(s.planting))
@@ -1711,7 +1713,7 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v12";
+const APP_VERSION = "v12.1";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   const tabName = { care: "My Tank", stock: "Stocking" }[state.view] || "Fish Finder";
@@ -1794,6 +1796,7 @@ function actualLph() {
   const rated = ratedLph();
   if (rated == null) return null;
   const s = state.stock;
+  if (s.lphMeasured) return rated;   // he measured the real thing — don't second-guess it
   return rated * (MEDIA_FLOW_F[s.media] || MEDIA_FLOW_F.some) * (TYPE_FLOW_F[s.filterType] || 1);
 }
 function turnoverOf() {
@@ -1803,9 +1806,12 @@ function turnoverOf() {
 }
 function filtrationFactor() {
   const s = state.stock, t = turnoverOf();
-  const base = t == null ? (FILTER_TYPE_F[s.filterType] || 1) : TURNOVER_BANDS.find(b => t < b.max).f;
-  const typeNudge = t == null ? 1 : (FILTER_TYPE_F[s.filterType] || 1) * 0.5 + 0.5; // type matters less once real flow is known
-  const f = base * typeNudge * (MEDIA_F[s.media] || 1);
+  // Once real flow is known, filter type is already expressed through TYPE_FLOW_F
+  // in the derate. Nudging capacity by type again counted it twice, and the two
+  // effects partly cancelled — so type only stands in for flow when flow is unknown.
+  const f = t == null
+    ? (FILTER_TYPE_F[s.filterType] || 1) * (MEDIA_F[s.media] || 1)
+    : TURNOVER_BANDS.find(b => t < b.max).f * (MEDIA_F[s.media] || 1);
   return Math.max(0.6, Math.min(1.45, +f.toFixed(3)));
 }
 function plantingFactor() {
@@ -1877,6 +1883,8 @@ function renderStocking() {
   $("stMedia").value = s.media;
   $("stPlanting").value = s.planting;
   $("stLph").value = s.lph > 0 ? s.lph : "";
+  $("stMeasured").checked = !!s.lphMeasured;
+  $("stMeasuredWrap").classList.toggle("on", !!s.lphMeasured);
   $("stFast").checked = !!s.fastGrowers;
   $("stFastWrap").classList.toggle("on", !!s.fastGrowers);
   renderTurnover();
@@ -1923,7 +1931,18 @@ function renderTurnover() {
     ${lost > 0 ? `<div class="compat-row meh" style="margin-top:.4rem">
       <span class="ico">🧱</span><span>The box says <b>${rated} L/h</b>, but that is measured with an empty filter and no hoses.
       With yours ${esc(MEDIA_FLOW_SAY[state.stock.media] || "full of media")}${state.stock.filterType === "canister" ? " and pushing up a canister's hoses" : ""},
-      reckon on about <b>${Math.round(actual)} L/h</b> — roughly <b>${lost}% less</b>. That lower number is what the turnover above uses.</span></div>` : ""}`;
+      reckon on about <b>${Math.round(actual)} L/h</b> — roughly <b>${lost}% less</b>. That lower number is what the turnover above uses.</span></div>` : ""}
+    ${chokeNote(t)}`;
+}
+/* The other half of the trade-off: media buys bacteria but costs flow, and past a
+   point it chokes the filter. Only worth saying when packing is what pushed the
+   turnover under the 4x community target. */
+function chokeNote(t) {
+  const s = state.stock, rated = ratedLph();
+  if (s.lphMeasured || rated == null || t >= 4) return "";
+  const emptier = rated * MEDIA_FLOW_F.light * (TYPE_FLOW_F[s.filterType] || 1) / state.tank.litres;
+  if (emptier < 4) return "";   // the filter is simply too small — not a media problem
+  return `<div class="compat-row meh" style="margin-top:.4rem"><span class="ico">⚖️</span><span>Packing this filter is what pushed you under 4×. More media means more bacteria, but it also blocks the water — past a point it chokes the filter. Running lighter media, this same filter would do about <b>${emptier.toFixed(1)}×</b>.</span></div>`;
 }
 function renderStockResult() {
   const m = stockingModel();
@@ -2031,6 +2050,11 @@ $("stPlanting").addEventListener("change", () => { state.stock.planting = $("stP
 $("stLph").addEventListener("input", () => {
   const v = +$("stLph").value;
   state.stock.lph = v > 0 ? v : null;
+  save(); renderTurnover(); renderStockResult();
+});
+$("stMeasured").addEventListener("change", () => {
+  state.stock.lphMeasured = $("stMeasured").checked;
+  $("stMeasuredWrap").classList.toggle("on", $("stMeasured").checked);
   save(); renderTurnover(); renderStockResult();
 });
 $("stFast").addEventListener("change", () => {
