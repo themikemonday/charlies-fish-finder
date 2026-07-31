@@ -461,6 +461,7 @@
 </header>
 
 <main>
+  <div id="standaloneNote"></div>
   <nav class="tabs">
     <button class="tab-btn active" id="tabFinder">🔍 Fish Finder</button>
     <button class="tab-btn" id="tabCare">🗓 My Tank<span class="tab-due" id="tabDue" hidden></span></button>
@@ -565,6 +566,11 @@
         <button class="btn ghost" id="importBtn">⬆ Load a saved file</button>
         <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
+      <div class="btn-row">
+        <button class="btn ghost" id="copyDataBtn">📋 Copy all my data</button>
+        <button class="btn ghost" id="pasteDataBtn">📥 Paste data in</button>
+      </div>
+      <div id="pasteSlot"></div>
       <p class="form-msg" id="dataMsg" hidden></p>
     </div>
   </section>
@@ -619,6 +625,12 @@
       <div id="stockAdd" class="btn-row"></div>
       <div id="stockList"></div>
       <div id="stockResult"></div>
+    </div>
+    <div class="card">
+      <h2>💾 Saved tanks</h2>
+      <p class="list-note">Keep as many possible tanks as you like — an angelfish one, a nano one, a dream one — and switch between them.</p>
+      <div class="btn-row"><button class="btn" id="saveTankBtn">💾 Save this plan</button></div>
+      <div id="savedTanks"></div>
     </div>
   </section>
 </main>
@@ -836,22 +848,22 @@ const FISH = [
    length), level is where it spends its time, minGroup is the smallest sane group.
    Same honesty rule as the rest: typical hobbyist guidance, worth cross-checking. */
 const FISH_EXTRA = {
-  neon:       { ph:[5.0,7.2], gh:[1,10],  cm:3,    load:1.0, level:"mid",    minGroup:8  },
-  cherrybarb: { ph:[6.0,7.5], gh:[5,15],  cm:5,    load:1.0, level:"mid",    minGroup:6  },
-  cory:       { ph:[6.0,7.5], gh:[2,15],  cm:6.5,  load:1.1, level:"bottom", minGroup:6  },
-  wcmm:       { ph:[6.0,8.0], gh:[5,19],  cm:4,    load:1.0, level:"mid",    minGroup:8  },
-  guppy:      { ph:[7.0,8.5], gh:[8,20],  cm:4,    load:1.0, level:"top",    minGroup:3  },
-  kuhli:      { ph:[5.5,7.0], gh:[1,10],  cm:9,    load:0.8, level:"bottom", minGroup:5  },
-  honey:      { ph:[6.0,7.5], gh:[3,12],  cm:5,    load:1.0, level:"top",    minGroup:1  },
-  dwarfg:     { ph:[6.0,7.5], gh:[3,15],  cm:7,    load:1.1, level:"top",    minGroup:1, solo:true },
-  betta:      { ph:[6.0,7.5], gh:[3,15],  cm:6.5,  load:1.0, level:"top",    minGroup:1, solo:true },
-  gbr:        { ph:[5.0,7.0], gh:[1,8],   cm:6,    load:1.2, level:"mid",    minGroup:1  },
-  bolivian:   { ph:[6.0,7.8], gh:[3,15],  cm:8,    load:1.2, level:"bottom", minGroup:1  },
-  apisto:     { ph:[6.0,7.5], gh:[3,12],  cm:7,    load:1.2, level:"bottom", minGroup:1  },
-  oto:        { ph:[6.0,7.5], gh:[2,15],  cm:4,    load:0.8, level:"all",    minGroup:6  },
-  cpd:        { ph:[6.5,7.5], gh:[2,10],  cm:2.5,  load:0.8, level:"mid",    minGroup:10 },
-  peapuffer:  { ph:[6.5,7.8], gh:[4,15],  cm:3,    load:1.3, level:"mid",    minGroup:1, solo:true },
-  angel:      { ph:[6.0,7.5], gh:[3,13],  cm:15,   load:1.3, level:"mid",    minGroup:1  }
+  neon:       { ph:[5.0,7.2], gh:[1,10],  cm:3,    load:1.0, level:"mid",    minGroup:8, aud:[4,8]  },
+  cherrybarb: { ph:[6.0,7.5], gh:[5,15],  cm:5,    load:1.0, level:"mid",    minGroup:6, aud:[6,10]  },
+  cory:       { ph:[6.0,7.5], gh:[2,15],  cm:6.5,  load:1.1, level:"bottom", minGroup:6, aud:[12,20]  },
+  wcmm:       { ph:[6.0,8.0], gh:[5,19],  cm:4,    load:1.0, level:"mid",    minGroup:8, aud:[5,9]  },
+  guppy:      { ph:[7.0,8.5], gh:[8,20],  cm:4,    load:1.0, level:"top",    minGroup:3, aud:[8,18]  },
+  kuhli:      { ph:[5.5,7.0], gh:[1,10],  cm:9,    load:0.8, level:"bottom", minGroup:5, aud:[12,20]  },
+  honey:      { ph:[6.0,7.5], gh:[3,12],  cm:5,    load:1.0, level:"top",    minGroup:1, aud:[15,25]  },
+  dwarfg:     { ph:[6.0,7.5], gh:[3,15],  cm:7,    load:1.1, level:"top",    minGroup:1, solo:true, aud:[18,30] },
+  betta:      { ph:[6.0,7.5], gh:[3,15],  cm:6.5,  load:1.0, level:"top",    minGroup:1, solo:true, aud:[15,40] },
+  gbr:        { ph:[5.0,7.0], gh:[1,8],   cm:6,    load:1.2, level:"mid",    minGroup:1, aud:[25,45]  },
+  bolivian:   { ph:[6.0,7.8], gh:[3,15],  cm:8,    load:1.2, level:"bottom", minGroup:1, aud:[25,40]  },
+  apisto:     { ph:[6.0,7.5], gh:[3,12],  cm:7,    load:1.2, level:"bottom", minGroup:1, aud:[35,60]  },
+  oto:        { ph:[6.0,7.5], gh:[2,15],  cm:4,    load:0.8, level:"all",    minGroup:6, aud:[12,20]  },
+  cpd:        { ph:[6.5,7.5], gh:[2,10],  cm:2.5,  load:0.8, level:"mid",    minGroup:10, aud:[15,25] },
+  peapuffer:  { ph:[6.5,7.8], gh:[4,15],  cm:3,    load:1.3, level:"mid",    minGroup:1, solo:true, aud:[15,25] },
+  angel:      { ph:[6.0,7.5], gh:[3,13],  cm:15,   load:1.3, level:"mid",    minGroup:1, aud:[20,45] }
 };
 FISH.forEach(f => Object.assign(f, FISH_EXTRA[f.id] || {}));
 
@@ -886,6 +898,9 @@ if (!Array.isArray(state.tasks)) state.tasks = defaultTasks();
 if (!Array.isArray(state.feedback)) state.feedback = [];
 if (typeof state.fbPhone !== "string") state.fbPhone = "";
 if (!Array.isArray(state.shortlist)) state.shortlist = [];
+if (!Array.isArray(state.savedTanks)) state.savedTanks = [];
+if (!state.photoPick || typeof state.photoPick !== "object") state.photoPick = {};
+if (typeof state.seenStandaloneNote !== "boolean") state.seenStandaloneNote = false;
 if (state.finderMode !== "swipe") state.finderMode = "grid";
 function migrateTank() {
   if (!Array.isArray(state.tank.crewFish)) state.tank.crewFish = [];
@@ -1090,7 +1105,33 @@ async function fetchWikiThumb(query) {
 function blobToDataURL(blob) {
   return new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(blob); });
 }
+/* Wikipedia's lead image is often a poor specimen shot, so Charlie can pick a
+   different one. His choice wins over the automatic lookup, permanently. */
+async function fetchWikiCandidates(query) {
+  const q = String(query).replace(/\s+spp?\.?$/i, "").trim();
+  const base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1";
+  const r = await fetch(`${base}&generator=images&gimlimit=25&titles=${encodeURIComponent(q)}&prop=imageinfo&iiprop=url&iiurlwidth=500`);
+  const j = await r.json();
+  const pages = (j && j.query && j.query.pages) || {};
+  return Object.values(pages)
+    .filter(p => /\.(jpe?g|png)$/i.test(p.title || "") &&
+      !/(logo|icon|commons|wiki|edit|status|map|distribution|range|symbol|flag|question|disambig)/i.test(p.title))
+    .map(p => p.imageinfo && p.imageinfo[0] && p.imageinfo[0].thumburl)
+    .filter(Boolean).slice(0, 12);
+}
 async function loadPhoto(f) {
+  const chosen = (state.photoPick || {})[f.id];
+  if (chosen) {
+    if (photoMem["pick:" + f.id] !== undefined) return photoMem["pick:" + f.id];
+    const cached = await idbGet("pick:" + f.id);
+    if (cached) { photoMem["pick:" + f.id] = cached; return cached; }
+    try {
+      const resp = await fetch(chosen);
+      const dataUrl = await blobToDataURL(await resp.blob());
+      if (dataUrl) { photoMem["pick:" + f.id] = dataUrl; idbSet("pick:" + f.id, dataUrl); return dataUrl; }
+    } catch (e) {}
+    photoMem["pick:" + f.id] = chosen; return chosen;
+  }
   if (photoMem[f.id] !== undefined) return photoMem[f.id] === "none" ? null : photoMem[f.id];
   const key = photoKey(f);
   const cached = await idbGet(key);
@@ -1302,7 +1343,9 @@ function renderDetail() {
       ${f.ph ? `<span class="spec"><b>pH</b> ${f.ph[0]}–${f.ph[1]}</span>` : ""}
       ${f.gh ? `<span class="spec"><b>GH</b> ${f.gh[0]}–${f.gh[1]} dGH</span>` : ""}
       ${f.level ? `<span class="spec"><b>Swims</b> ${esc(fishLevel(f))}</span>` : ""}
+      ${f.aud ? `<span class="spec"><b>Price</b> A$${f.aud[0]}–${f.aud[1]} each</span>` : ""}
     </div>
+    ${f.aud && fishMinGroup(f) > 1 ? `<p class="invert-note">A group of ${fishMinGroup(f)} would be roughly <b>A$${f.aud[0] * fishMinGroup(f)}–${f.aud[1] * fishMinGroup(f)}</b>. Rough Australian shop prices — they move about a lot by shop, size and season, so treat them as a ballpark and check locally.</p>` : f.aud ? `<p class="invert-note">Rough Australian shop price — it moves about a lot by shop, size and season, so treat it as a ballpark and check locally.</p>` : ""}
     <p class="blurb">${esc(f.blurb)}</p>
     ${f.teach ? `<div class="teach"><b>Thinking tool:</b> ${esc(f.teach)}</div>` : ""}
     <h2 style="margin-top:1.2rem">Against your tank</h2>
@@ -1324,7 +1367,12 @@ function renderDetail() {
       </div>
       <p style="margin-top:.45rem">${verdictLine}</p>
     </div>
-    ${f.custom ? `<div class="btn-row"><button class="btn ghost" id="editFishBtn">✏️ Edit this fish</button><button class="btn danger" id="delFishBtn">🗑 Remove</button></div>` : ""}`;
+    <div class="btn-row">
+      <button class="btn ghost" id="photoBtn">🖼 Pick a better photo</button>
+      ${f.custom ? `<button class="btn ghost" id="editFishBtn">✏️ Edit this fish</button><button class="btn danger" id="delFishBtn">🗑 Remove</button>` : ""}
+    </div>
+    <div id="photoSlot"></div>`;
+  $("photoBtn").addEventListener("click", () => openPhotoPicker(f));
   hydratePhotos($("detail"));
   $("detHeart").addEventListener("click", () => {
     toggleShort(f.id);
@@ -1352,6 +1400,31 @@ function renderDetail() {
         state.verdicts[fid][i] = state.verdicts[fid][i] === btn.dataset.v ? null : btn.dataset.v;
         save(); renderDetail();
       })));
+}
+async function openPhotoPicker(f) {
+  const slot = $("photoSlot");
+  slot.innerHTML = `<p class="list-note">Looking for photos of ${esc(f.name)}…</p>`;
+  let urls = [];
+  try { urls = await fetchWikiCandidates(f.sci || f.name); } catch (e) {}
+  if (!urls.length) {
+    slot.innerHTML = `<p class="list-note">No other photos found for this one — it keeps its colour tile. (Needs internet the first time.)</p>`;
+    return;
+  }
+  slot.innerHTML = `<p class="list-note">Tap the one you like best. Your pick sticks, and works offline afterwards.</p>
+    <div class="fish-grid" id="photoGrid">${urls.map((u, i) =>
+      `<button class="fcard" data-pick="${i}"><span class="hero" style="height:94px;background:var(--panel-2)"><img class="hero-photo on" src="${esc(u)}" alt="" style="opacity:1"></span></button>`).join("")}</div>
+    <div class="btn-row">${(state.photoPick || {})[f.id] ? `<button class="btn ghost" id="photoReset">↺ Back to the automatic one</button>` : ""}<button class="btn ghost" id="photoClose">Close</button></div>`;
+  slot.querySelectorAll("[data-pick]").forEach(b => b.addEventListener("click", () => {
+    if (!state.photoPick) state.photoPick = {};
+    state.photoPick[f.id] = urls[+b.dataset.pick];
+    delete photoMem["pick:" + f.id];
+    save(); renderDetail();
+  }));
+  if ($("photoReset")) $("photoReset").addEventListener("click", () => {
+    delete state.photoPick[f.id]; delete photoMem["pick:" + f.id];
+    save(); renderDetail();
+  });
+  $("photoClose").addEventListener("click", () => { slot.innerHTML = ""; });
 }
 function renderInvertNote() {
   const t = state.tank, bits = [];
@@ -1421,6 +1494,7 @@ function aiPrompt(name) {
   "cm": adult length in cm as a number,
   "level": "top | mid | bottom | all",
   "minGroup": smallest sensible number to keep together,
+  "aud": [low, high] typical AUSTRALIAN shop price per fish in AUD,
   "load": 0.8 for a slim tidy fish, 1.0 normal, 1.3 for a messy one like a cichlid or puffer,
   "shrimp": "safe | shrimplets | risky | no",
   "snail": "safe | risky | no",
@@ -1431,7 +1505,7 @@ function aiPrompt(name) {
   ]
 }
 
-Rules: temp is degrees C as numbers; minL is tank litres as a number; ph is the pH range and gh is hardness in dGH; 2 to 4 problems; "setup" = solve once before buying, "habit" = an ongoing routine, "risk" = can only be watched for and planned around. Be honest about conflicts with cherry shrimp and a mystery snail. Don't soften real problems and don't invent fake ones.`;
+Rules: prices must be AUSTRALIAN retail (Australia is far dearer than the US — a hillstream loach is about A$60-89 here, not US$10-20); temp is degrees C as numbers; minL is tank litres as a number; ph is the pH range and gh is hardness in dGH; 2 to 4 problems; "setup" = solve once before buying, "habit" = an ongoing routine, "risk" = can only be watched for and planned around. Be honest about conflicts with cherry shrimp and a mystery snail. Don't soften real problems and don't invent fake ones.`;
 }
 /* Forgiving JSON reader: iPads turn " into curly quotes, chat apps add prose or code
    fences around the answer, and models sometimes leave a trailing comma. */
@@ -1475,6 +1549,7 @@ function normaliseFish(o, keepId) {
     cm: +o.cm > 0 ? +o.cm : undefined,
     level: ["top", "mid", "bottom", "all"].includes(o.level) ? o.level : undefined,
     minGroup: +o.minGroup > 0 ? Math.round(+o.minGroup) : undefined,
+    aud: pairOrNull(o.aud),
     load: +o.load > 0 ? +o.load : undefined,
     problems: o.problems.slice(0, 5).map(p => ({ type: p.type, title: String(p.title), why: String(p.why || ""), solve: String(p.solve || "") }))
   };
@@ -1713,7 +1788,7 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v12.1";
+const APP_VERSION = "v13";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   const tabName = { care: "My Tank", stock: "Stocking" }[state.view] || "Fish Finder";
@@ -1901,7 +1976,7 @@ function renderStocking() {
     <div class="stock-row">
       <span class="sr-emoji">${esc(r.f.emoji)}</span>
       <span><span class="sr-name">${esc(r.f.name)}</span><br>
-        <span class="sr-meta">${fishCm(r.f)} cm adult · ${esc(fishLevel(r.f))} · group of ${fishMinGroup(r.f)}+</span></span>
+        <span class="sr-meta">${fishCm(r.f)} cm adult · ${esc(fishLevel(r.f))} · group of ${fishMinGroup(r.f)}+${r.f.aud ? ` · A$${r.f.aud[0] * r.qty}–${r.f.aud[1] * r.qty}` : ""}</span></span>
       <input type="number" min="1" max="200" value="${r.qty}" data-qty="${r.f.id}" aria-label="How many">
       <button class="mini rm" data-rmstock="${r.f.id}">remove</button>
     </div>`).join("") || `<p class="list-note">Nothing planned yet — add the fish you're thinking about above, including the ones you already keep.</p>`;
@@ -1980,6 +2055,67 @@ function renderStockResult() {
     </details>`;
 }
 
+/* ---------------- Home-screen app storage ----------------
+   iOS gives a Home Screen web app its OWN storage, separate from Safari. Nothing
+   is deleted — the fish are still in Safari — but no code can reach across that
+   boundary, so the only honest fix is to warn and give a transfer route. */
+function isStandalone() {
+  return navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+}
+function dataBundle() {
+  return {
+    app: "charlies-fish-finder", version: 1, exported: new Date().toISOString(),
+    tank: state.tank, verdicts: state.verdicts, custom: state.custom, tasks: state.tasks,
+    feedback: state.feedback, shortlist: state.shortlist, finderMode: state.finderMode,
+    fbPhone: state.fbPhone, stock: state.stock,
+    savedTanks: state.savedTanks, photoPick: state.photoPick
+  };
+}
+function applyBundle(d) {
+  if (!d || d.app !== "charlies-fish-finder") return false;
+  state.tank = d.tank || state.tank;
+  state.verdicts = d.verdicts || {};
+  state.custom = Array.isArray(d.custom) ? d.custom : [];
+  state.tasks = Array.isArray(d.tasks) ? d.tasks : defaultTasks();
+  state.feedback = Array.isArray(d.feedback) ? d.feedback : [];
+  state.shortlist = Array.isArray(d.shortlist) ? d.shortlist : [];
+  state.fbPhone = typeof d.fbPhone === "string" ? d.fbPhone : "";
+  state.stock = d.stock && typeof d.stock === "object" ? d.stock : null;
+  state.savedTanks = Array.isArray(d.savedTanks) ? d.savedTanks : [];
+  state.photoPick = d.photoPick && typeof d.photoPick === "object" ? d.photoPick : {};
+  if (d.finderMode === "swipe" || d.finderMode === "grid") state.finderMode = d.finderMode;
+  state.sel = null; addMode = null; swipeIdx = 0; gridFilter = "all";
+  migrateTank(); save();
+  refreshEverything();
+  return true;
+}
+function refreshEverything() {
+  $("litres").value = state.tank.litres; $("temp").value = state.tank.temp;
+  $("tempOut").textContent = state.tank.temp + "°C";
+  $("shrimpType").value = state.tank.shrimpType;
+  ["ph", "gh", "kh"].forEach(k => { $({ ph: "wpH", gh: "wGH", kh: "wKH" }[k]).value = typeof state.tank[k] === "number" ? state.tank[k] : ""; });
+  ["tShrimp", "tSnail"].forEach((id, i) => {
+    const el = $(id), key = i === 0 ? "shrimp" : "snail";
+    el.querySelector("input").checked = state.tank[key]; el.classList.toggle("on", state.tank[key]);
+  });
+  renderCrew(); renderInvertNote(); renderTankMini();
+  showScreen("browse"); renderBrowse(); renderTasks();
+}
+function renderStandaloneNote() {
+  const box = $("standaloneNote");
+  if (!isStandalone() || state.seenStandaloneNote || state.custom.length) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="card" style="border-color:var(--warn)">
+    <h2>📲 Your fish are still in Safari</h2>
+    <p class="list-note">Adding this to your Home Screen gives it its own separate storage — iPads keep the app and Safari apart, so the fish you added in Safari aren't here. <b>Nothing has been deleted.</b></p>
+    <p class="list-note">To bring them over: open the app in <b>Safari</b> → My Tank → <b>📋 Copy all my data</b>. Then come back here and tap <b>📥 Paste data in</b> on the My Tank screen.</p>
+    <div class="btn-row"><button class="btn ghost" id="dismissStandalone">Got it, hide this</button></div>
+  </div>`;
+  $("dismissStandalone").addEventListener("click", () => {
+    state.seenStandaloneNote = true; save(); renderStandaloneNote();
+  });
+}
+
 /* ---------------- Tabs ---------------- */
 function setView(v) {
   state.view = v; save();
@@ -1990,7 +2126,41 @@ function setView(v) {
   $("tabCare").classList.toggle("active", v === "care");
   $("tabStock").classList.toggle("active", v === "stock");
   if (v === "care") renderTasks();
-  if (v === "stock") renderStocking();
+  if (v === "stock") { renderStocking(); renderSavedTanks(); }
+}
+/* Saved plans keep the whole setup, not just the fish — a plan with a bigger
+   filter is a different plan. */
+function planSnapshot() {
+  const s = state.stock;
+  return { planned: JSON.parse(JSON.stringify(s.planned)), filterType: s.filterType, media: s.media,
+           lph: s.lph, lphMeasured: s.lphMeasured, planting: s.planting, fastGrowers: s.fastGrowers };
+}
+function renderSavedTanks() {
+  const list = state.savedTanks || [];
+  $("savedTanks").innerHTML = list.length ? list.map(p => {
+    const names = p.planned.map(x => { const f = allFish().find(y => y.id === x.id); return f ? `${x.qty}× ${f.name}` : null; }).filter(Boolean).join(", ");
+    return `<div class="stock-row">
+      <span class="sr-emoji">🪣</span>
+      <span><span class="sr-name">${esc(p.name)}</span><br><span class="sr-meta">${esc(names || "empty")}</span></span>
+      <button class="mini" data-loadtank="${esc(p.id)}">load</button>
+      <button class="mini" data-deltank="${esc(p.id)}">delete</button>
+    </div>`;
+  }).join("") : `<p class="list-note">Nothing saved yet. Build a plan above, then tap “Save this plan”.</p>`;
+  $("savedTanks").querySelectorAll("[data-loadtank]").forEach(b => b.addEventListener("click", () => {
+    const p = (state.savedTanks || []).find(x => x.id === b.dataset.loadtank);
+    if (!p) return;
+    Object.assign(state.stock, planSnapshot.call(null) && {}, {
+      planned: JSON.parse(JSON.stringify(p.planned)), filterType: p.filterType, media: p.media,
+      lph: p.lph, lphMeasured: p.lphMeasured, planting: p.planting, fastGrowers: p.fastGrowers
+    });
+    migrateTank(); save(); renderStocking(); renderSavedTanks();
+  }));
+  $("savedTanks").querySelectorAll("[data-deltank]").forEach(b => b.addEventListener("click", () => {
+    const p = (state.savedTanks || []).find(x => x.id === b.dataset.deltank);
+    if (!p || !confirm(`Delete the saved tank “${p.name}”?`)) return;
+    state.savedTanks = state.savedTanks.filter(x => x.id !== b.dataset.deltank);
+    save(); renderSavedTanks();
+  }));
 }
 
 /* ---------------- Wiring ---------------- */
@@ -2052,6 +2222,13 @@ $("stLph").addEventListener("input", () => {
   state.stock.lph = v > 0 ? v : null;
   save(); renderTurnover(); renderStockResult();
 });
+$("saveTankBtn").addEventListener("click", () => {
+  if (!state.stock.planned.length) { alert("Add some fish to the plan first."); return; }
+  const name = (prompt("Call this tank what?", "") || "").trim();
+  if (!name) return;
+  state.savedTanks.push(Object.assign({ id: "t" + Date.now().toString(36), name }, planSnapshot()));
+  save(); renderSavedTanks();
+});
 $("stMeasured").addEventListener("change", () => {
   state.stock.lphMeasured = $("stMeasured").checked;
   $("stMeasuredWrap").classList.toggle("on", $("stMeasured").checked);
@@ -2092,6 +2269,36 @@ $("fbSend").addEventListener("click", async () => {
   $("fbText").value = ""; $("fbSentMsg").hidden = false; renderFbPrev();
   shareFeedback(fbMsg(note));
 });
+$("copyDataBtn").addEventListener("click", async () => {
+  const txt = JSON.stringify(dataBundle());
+  try { await navigator.clipboard.writeText(txt); }
+  catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e2) {}
+    ta.remove();
+  }
+  dataMsg("Copied. Now open the other one (Safari or the Home Screen app) and tap “Paste data in”.", true);
+});
+$("pasteDataBtn").addEventListener("click", () => {
+  $("pasteSlot").innerHTML = `<div class="pblock" style="margin-top:.8rem">
+    <h5>Paste your data here</h5>
+    <textarea id="pasteBox" class="prompt-box" style="width:100%" placeholder="Paste what you copied from the other one"></textarea>
+    <div class="btn-row"><button class="btn" id="pasteGo">✔ Load it</button><button class="btn ghost" id="pasteCancel">Cancel</button></div>
+  </div>`;
+  $("pasteCancel").addEventListener("click", () => { $("pasteSlot").innerHTML = ""; });
+  $("pasteGo").addEventListener("click", () => {
+    let d = null;
+    try { d = looseParseJSON($("pasteBox").value); }
+    catch (e) { dataMsg("That doesn't look like Fish Finder data — copy it again with “Copy all my data”.", false); return; }
+    if (!confirm("Load this? It replaces what's on this device.")) return;
+    if (!applyBundle(d)) { dataMsg("That isn't a Fish Finder backup.", false); return; }
+    state.seenStandaloneNote = true; save();
+    $("pasteSlot").innerHTML = ""; renderStandaloneNote();
+    dataMsg(`Loaded — ${state.custom.length} of your own fish came across.`, true);
+  });
+});
 $("importBtn").addEventListener("click", () => $("importFile").click());
 $("importFile").addEventListener("change", () => {
   const file = $("importFile").files[0];
@@ -2129,6 +2336,7 @@ $("importFile").addEventListener("change", () => {
 if (narrow()) $("tankDetails").removeAttribute("open");
 renderCrew(); renderInvertNote(); renderTankMini();
 showScreen("browse"); renderBrowse();
+renderStandaloneNote();
 updateTabDue();
 setView(state.view === "care" ? "care" : "finder");
 </script>
