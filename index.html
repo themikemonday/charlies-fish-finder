@@ -353,6 +353,8 @@
   .btn.ghost { background: var(--panel-2); color: var(--accent); }
   .btn.danger { border-color: var(--bad); background: var(--bad-bg); color: var(--bad); }
   .btn-row { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .6rem; }
+  .own-photo { margin: .2rem 0 .9rem; }
+  .own-photo label.btn { display: inline-block; }   /* a label needs this to take the button's padding */
   /* Task cards */
   .task {
     display: flex; align-items: center; gap: .8rem; border: 1px solid var(--line);
@@ -618,6 +620,27 @@
           <label class="crew-toggle" id="stFastWrap"><input type="checkbox" id="stFast"> 🌿 Mostly fast growers</label>
         </div>
         <div class="tank-field">
+          <label for="stWcPct">Water change</label>
+          <select id="stWcPct" class="crew-select">
+            <option value="0">I don't really</option>
+            <option value="10">10%</option>
+            <option value="20">20%</option>
+            <option value="25">25%</option>
+            <option value="30">30%</option>
+            <option value="40">40%</option>
+            <option value="50">50%</option>
+          </select>
+        </div>
+        <div class="tank-field">
+          <label for="stWcDays">…how often</label>
+          <select id="stWcDays" class="crew-select">
+            <option value="3.5">Twice a week</option>
+            <option value="7">Every week</option>
+            <option value="14">Every fortnight</option>
+            <option value="30">Every month</option>
+          </select>
+        </div>
+        <div class="tank-field">
           <label>Tank</label>
           <span class="tank-mini" id="stTankMini"></span>
         </div>
@@ -876,6 +899,12 @@ function fishCm(f) {
   return m ? +m[0] : 5;
 }
 function fishLoad(f) { return f.load > 0 ? f.load : 1.0; }
+/* Where a fish's messiness figure came from, so the number can be argued with
+   rather than taken on trust. An unsourced 1.0 says so instead of hiding. */
+function loadSource(f) {
+  if (!(f.load > 0)) return "assumed average";
+  return f.custom ? "your research" : "built in";
+}
 function fishLevel(f) { return ["top", "mid", "bottom", "all"].includes(f.level) ? f.level : "mid"; }
 function fishMinGroup(f) { return f.minGroup > 0 ? f.minGroup : 1; }
 
@@ -901,6 +930,11 @@ if (typeof state.fbPhone !== "string") state.fbPhone = "";
 if (!Array.isArray(state.shortlist)) state.shortlist = [];
 if (!Array.isArray(state.savedTanks)) state.savedTanks = [];
 if (!state.photoPick || typeof state.photoPick !== "object") state.photoPick = {};
+/* Photos Charlie took himself, shrunk down and kept as data URLs. They live in
+   ordinary storage rather than the IndexedDB photo cache so they ride along in
+   "Copy all my data" — a photo of his own fish that vanished on the move to the
+   Home Screen app would be the worst one to lose. */
+if (!state.ownPhotos || typeof state.ownPhotos !== "object") state.ownPhotos = {};
 if (typeof state.seenStandaloneNote !== "boolean") state.seenStandaloneNote = false;
 if (state.finderMode !== "swipe") state.finderMode = "grid";
 function migrateTank() {
@@ -920,6 +954,17 @@ function migrateTank() {
   // v10 used three planting levels; map the old values onto the new five
   if (!["none", "few", "some", "dense", "jungle"].includes(s.planting))
     s.planting = ({ bare: "few", some: "some", heavy: "dense" })[s.planting] || "some";
+  /* Water changes. Seeded from the job already in My Tank rather than a made-up
+     default, so the first thing he sees is his own routine. */
+  if (typeof s.wcPct !== "number") s.wcPct = 30;
+  if (typeof s.wcDays !== "number") {
+    const job = (state.tasks || []).find(t => t.id === "wc");
+    s.wcDays = job && job.every > 0 ? job.every : 7;
+  }
+  // snap to the offered choices, or the dropdown reads blank and the routine looks unset
+  const nearest = (v, opts) => opts.reduce((a, b) => Math.abs(b - v) < Math.abs(a - v) ? b : a, opts[0]);
+  if (![0, 10, 20, 25, 30, 40, 50].includes(s.wcPct)) s.wcPct = nearest(s.wcPct, [0, 10, 20, 25, 30, 40, 50]);
+  if (![3.5, 7, 14, 30].includes(s.wcDays)) s.wcDays = nearest(s.wcDays, [3.5, 7, 14, 30]);
 }
 migrateTank();
 function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -1106,6 +1151,52 @@ async function fetchWikiThumb(query) {
 function blobToDataURL(blob) {
   return new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(blob); });
 }
+/* A photo Charlie took himself, shrunk before it is stored. A full-size iPad photo
+   is several megabytes and the whole of ordinary storage is only a few, so an
+   unshrunk photo would push out the dataset — the fish themselves — the moment he
+   added a second one. 480px is plenty for a hero card. */
+const OWN_PHOTO_MAX = 480;
+function shrinkImage(file) {
+  return new Promise(res => {
+    const fr = new FileReader();
+    fr.onerror = () => res(null);
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => res(null);
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, OWN_PHOTO_MAX / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
+          const c = document.createElement("canvas");
+          c.width = w; c.height = h;
+          c.getContext("2d").drawImage(img, 0, 0, w, h);
+          res(c.toDataURL("image/jpeg", 0.7));
+        } catch (e) { res(null); }
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+/* Storage can be full. Putting the photo in and saving is the only honest way to
+   find out, so it goes in, and if the save is refused everything is put back
+   exactly as it was and the caller is told. Silently keeping a photo that was
+   never stored would lose his fish on the next reload. */
+function setOwnPhoto(f, dataUrl) {
+  const prevOwn = state.ownPhotos[f.id], prevPick = state.photoPick[f.id];
+  state.ownPhotos[f.id] = dataUrl;
+  state.photoPick[f.id] = "own";
+  try {
+    save();
+  } catch (e) {
+    if (prevOwn === undefined) delete state.ownPhotos[f.id]; else state.ownPhotos[f.id] = prevOwn;
+    if (prevPick === undefined) delete state.photoPick[f.id]; else state.photoPick[f.id] = prevPick;
+    try { save(); } catch (e2) {}
+    return false;
+  }
+  delete photoMem["pick:" + f.id];
+  return true;
+}
 /* Wikipedia's lead image is often a poor specimen shot, so Charlie can pick a
    different one. His choice wins over the automatic lookup, permanently. */
 async function fetchWikiCandidates(query) {
@@ -1122,7 +1213,9 @@ async function fetchWikiCandidates(query) {
 }
 async function loadPhoto(f) {
   const chosen = (state.photoPick || {})[f.id];
-  if (chosen) {
+  // his own photo wins over everything; a marker with no photo behind it falls back
+  if (chosen === "own" && (state.ownPhotos || {})[f.id]) return state.ownPhotos[f.id];
+  if (chosen && chosen !== "own") {
     if (photoMem["pick:" + f.id] !== undefined) return photoMem["pick:" + f.id];
     const cached = await idbGet("pick:" + f.id);
     if (cached) { photoMem["pick:" + f.id] = cached; return cached; }
@@ -1385,6 +1478,7 @@ function renderDetail() {
       if (!confirm(`Remove ${f.name} from your dataset?`)) return;
       state.custom = state.custom.filter(x => x.id !== f.id);
       delete state.verdicts[f.id];
+      delete state.photoPick[f.id]; delete state.ownPhotos[f.id];   // don't leave his photo behind taking up room
       state.shortlist = state.shortlist.filter(x => x !== f.id);
       state.tank.crewFish = (state.tank.crewFish || []).filter(x => x !== f.id);
       state.stock.planned = (state.stock.planned || []).filter(p => p.id !== f.id);
@@ -1407,22 +1501,47 @@ async function openPhotoPicker(f) {
   slot.innerHTML = `<p class="list-note">Looking for photos of ${esc(f.name)}…</p>`;
   let urls = [];
   try { urls = await fetchWikiCandidates(f.sci || f.name); } catch (e) {}
-  if (!urls.length) {
-    slot.innerHTML = `<p class="list-note">No other photos found for this one — it keeps its colour tile. (Needs internet the first time.)</p>`;
-    return;
-  }
-  slot.innerHTML = `<p class="list-note">Tap the one you like best. Your pick sticks, and works offline afterwards.</p>
-    <div class="fish-grid" id="photoGrid">${urls.map((u, i) =>
-      `<button class="fcard" data-pick="${i}"><span class="hero" style="height:94px;background:var(--panel-2)"><img class="hero-photo on" src="${esc(u)}" alt="" style="opacity:1"></span></button>`).join("")}</div>
-    <div class="btn-row">${(state.photoPick || {})[f.id] ? `<button class="btn ghost" id="photoReset">↺ Back to the automatic one</button>` : ""}<button class="btn ghost" id="photoClose">Close</button></div>`;
+  /* Your own photo is offered first and always, including when Wikipedia has
+     nothing. Charlie's report was that the alternatives are rubbish too, and for
+     an uncommon fish that whole pool can be two bad shots. */
+  const ownBlock = `<div class="own-photo">
+      <label class="btn ghost" for="ownPhotoFile">📷 Use my own photo</label>
+      <input type="file" id="ownPhotoFile" accept="image/*" hidden>
+      <p class="list-note">Take one of your actual fish, or pick from your photos. It's shrunk to fit, stays on your iPad, and goes with you in “Copy all my data”.</p>
+      <p class="form-msg" id="ownPhotoMsg" hidden></p>
+    </div>`;
+  const resetBtn = (state.photoPick || {})[f.id] ? `<button class="btn ghost" id="photoReset">↺ Back to the automatic one</button>` : "";
+  slot.innerHTML = urls.length
+    ? `${ownBlock}<p class="list-note">Or tap one of these. Your pick sticks, and works offline afterwards.</p>
+       <div class="fish-grid" id="photoGrid">${urls.map((u, i) =>
+         `<button class="fcard" data-pick="${i}"><span class="hero" style="height:94px;background:var(--panel-2)"><img class="hero-photo on" src="${esc(u)}" alt="" style="opacity:1"></span></button>`).join("")}</div>
+       <div class="btn-row">${resetBtn}<button class="btn ghost" id="photoClose">Close</button></div>`
+    : `${ownBlock}<p class="list-note">No other photos found for this one, so your own is the only way to improve it. (Finding Wikipedia's needs internet the first time.)</p>
+       <div class="btn-row">${resetBtn}<button class="btn ghost" id="photoClose">Close</button></div>`;
+
+  $("ownPhotoFile").addEventListener("change", async () => {
+    const file = $("ownPhotoFile").files && $("ownPhotoFile").files[0];
+    if (!file) return;
+    const msg = $("ownPhotoMsg");
+    msg.hidden = false; msg.classList.remove("err"); msg.textContent = "Shrinking your photo…";
+    const dataUrl = await shrinkImage(file);
+    if (!dataUrl) { msg.classList.add("err"); msg.textContent = "Couldn't read that one. Try a different photo."; return; }
+    if (!setOwnPhoto(f, dataUrl)) {
+      msg.classList.add("err");
+      msg.textContent = "No room left on this iPad to store it, so nothing was changed. Remove a photo you added to another fish and try again.";
+      return;
+    }
+    renderDetail();
+  });
   slot.querySelectorAll("[data-pick]").forEach(b => b.addEventListener("click", () => {
     if (!state.photoPick) state.photoPick = {};
     state.photoPick[f.id] = urls[+b.dataset.pick];
+    delete state.ownPhotos[f.id];   // a Wikipedia pick replaces his own, so free the space
     delete photoMem["pick:" + f.id];
     save(); renderDetail();
   }));
   if ($("photoReset")) $("photoReset").addEventListener("click", () => {
-    delete state.photoPick[f.id]; delete photoMem["pick:" + f.id];
+    delete state.photoPick[f.id]; delete state.ownPhotos[f.id]; delete photoMem["pick:" + f.id];
     save(); renderDetail();
   });
   $("photoClose").addEventListener("click", () => { slot.innerHTML = ""; });
@@ -1496,7 +1615,7 @@ function aiPrompt(name) {
   "level": "top | mid | bottom | all",
   "minGroup": smallest sensible number to keep together,
   "aud": [low, high] typical AUSTRALIAN shop price per fish in AUD,
-  "load": 0.8 for a slim tidy fish, 1.0 normal, 1.3 for a messy one like a cichlid or puffer,
+  "load": how much waste this fish makes for its size next to an average community fish - 0.8 slim and tidy (small tetras, rasboras), 1.0 average, 1.2 to 1.4 for heavy waste producers (cichlids, puffers, goldfish, plecos). Base it on what keepers actually report for this species, not a guess from its length,
   "shrimp": "safe | shrimplets | risky | no",
   "snail": "safe | risky | no",
   "blurb": "2 honest sentences about the fish",
@@ -1624,6 +1743,11 @@ function renderAddPanel() {
         <div><label>Shrimp-safe? *</label><select id="ff-shrimp">${SAFE_ENUM.map(v => `<option value="${v}" ${f.shrimp === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>
         <div><label>Snail-safe? *</label><select id="ff-snail">${["safe", "risky", "no"].map(v => `<option value="${v}" ${f.snail === v ? "selected" : ""}>${v}</option>`).join("")}</select></div>
       </div>
+      <div class="frow">
+        <div><label>Where it swims</label><select id="ff-level">${[["", "Not sure"], ["top", "Top"], ["mid", "Middle"], ["bottom", "Bottom"], ["all", "All over"]].map(([v, l]) => `<option value="${v}" ${f.level === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+        <div><label>Adult length (cm)</label><input type="number" id="ff-cm" min="0.5" max="200" step="0.5" value="${f.cm > 0 ? f.cm : ""}" placeholder="e.g. 6"></div>
+      </div>
+      <p class="list-note">Those two drive the stocking calculator. Leave the length blank and it reads a number out of "Adult size" above; leave the swimming level on "Not sure" and it counts the fish as a middle swimmer.</p>
       <div><label>About this fish</label><textarea id="ff-blurb" rows="2">${esc(f.blurb || "")}</textarea></div>
       <div><label>What it teaches (optional)</label><textarea id="ff-teach" rows="2">${esc(f.teach || "")}</textarea></div>
       ${[0, 1, 2].map(i => probBlock(i, f.problems && f.problems[i])).join("")}
@@ -1675,7 +1799,7 @@ function renderAddPanel() {
          silently stripped its swimming level, adult cm, pH and hardness ranges,
          group size, price and load factor, and the fish quietly got worse. */
       const carried = editing ? {
-        cm: editing.cm, level: editing.level, ph: editing.ph, gh: editing.gh,
+        ph: editing.ph, gh: editing.gh,
         minGroup: editing.minGroup, aud: editing.aud, load: editing.load
       } : {};
       const obj = Object.assign(carried, {
@@ -1683,6 +1807,7 @@ function renderAddPanel() {
         size: $("ff-size").value, group: $("ff-group").value,
         temp: ($("ff-tmin").value === "" || $("ff-tmax").value === "") ? [] : [+$("ff-tmin").value, +$("ff-tmax").value],
         minL: +$("ff-minl").value, shrimp: $("ff-shrimp").value, snail: $("ff-snail").value,
+        level: $("ff-level").value, cm: $("ff-cm").value === "" ? undefined : +$("ff-cm").value,
         blurb: $("ff-blurb").value, teach: $("ff-teach").value, problems
       });
       const errs = validateFish(obj), msg = $("formMsg");
@@ -1798,7 +1923,7 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v13.2";
+const APP_VERSION = "v14";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   const tabName = { care: "My Tank", stock: "Stocking" }[state.view] || "Fish Finder";
@@ -1904,6 +2029,22 @@ function plantingFactor() {
   const f = (PLANTING_F[s.planting] || 1) * (s.fastGrowers && s.planting !== "none" ? 1.05 : 1);
   return Math.max(0.85, Math.min(1.25, +f.toFixed(3)));
 }
+/* Water changes are the one factor here that is a promise rather than a fact. A
+   filter is bolted to the tank; a 50%-weekly routine is something a person has to
+   keep doing. So the effect is deliberately modest, it is never allowed to be the
+   only reason a plan passes (see the fragile-plan warning), and the app says out
+   loud that it only counts if he actually does it. Skipping changes is punished
+   harder than doing extra is rewarded, because that asymmetry is the real one. */
+function weeklyWaterChange() {
+  const s = state.stock;
+  if (!(s.wcPct > 0) || !(s.wcDays > 0)) return 0;
+  return s.wcPct * (7 / s.wcDays);
+}
+function waterChangeFactor() {
+  const weekly = weeklyWaterChange();
+  if (weekly <= 30) return +(0.7 + (weekly / 30) * 0.3).toFixed(2);  // none 0.7 → weekly 30% 1.0
+  return +Math.min(1.15, 1 + (weekly - 30) / 300).toFixed(2);        // 60% 1.10, 75%+ caps at 1.15
+}
 function stockLoadOf(f, qty) { return Math.pow(fishCm(f), 1.3) * fishLoad(f) * qty; }
 function stockingModel() {
   const t = state.tank, s = state.stock;
@@ -1913,9 +2054,15 @@ function stockingModel() {
     return { f, qty: p.qty, load: stockLoadOf(f, p.qty) };
   }).filter(Boolean);
   const totalLoad = rows.reduce((a, r) => a + r.load, 0);
-  const fF = filtrationFactor(), pF = plantingFactor();
-  const room = Math.max(1, t.litres * ROOM_PER_LITRE * fF * pF);
+  const fF = filtrationFactor(), pF = plantingFactor(), wF = waterChangeFactor();
+  const room = Math.max(1, t.litres * ROOM_PER_LITRE * fF * pF * wF);
   const pct = Math.round((totalLoad / room) * 100);
+  /* The same plan on an ordinary weekly 30%. If it only fits because of a heavy
+     routine, that gets said out loud instead of disappearing into a multiplier. */
+  const baseRoom = Math.max(1, t.litres * ROOM_PER_LITRE * fF * pF);
+  const basePct = Math.round((totalLoad / baseRoom) * 100);
+  const propped = wF > 1 && basePct > 100 && pct <= 100;
+  const weeklyWc = weeklyWaterChange();
   const levels = { top: 0, mid: 0, bottom: 0, all: 0 };
   rows.forEach(r => { levels[fishLevel(r.f)] += r.load; });
   const warnings = [];
@@ -1958,7 +2105,9 @@ function stockingModel() {
   if (sGh && !sGh.ok) warnings.push({ lvl: "no", text: `No water hardness suits all of these at once. ${sGh.have.map(r => `${r.f.name} ${r.f.gh[0]}–${r.f.gh[1]} dGH`).join("; ")}.` });
   else if (sGh && sGh.hi - sGh.lo < 3) warnings.push({ lvl: "meh", text: `They only share ${sGh.lo}–${sGh.hi} dGH. Technically possible, but you'd be holding the hardness on a knife edge to keep everyone happy.` });
   const noChem = typeof t.ph !== "number" && typeof t.gh !== "number";
-  return { rows, totalLoad, room, pct, levels, warnings, fF, pF, sTemp, sPh, sGh, noChem };
+  // fish with no messiness figure of their own are being counted as average — say which
+  const assumed = rows.filter(r => !(r.f.load > 0));
+  return { rows, totalLoad, room, pct, levels, warnings, fF, pF, wF, weeklyWc, basePct, propped, assumed, sTemp, sPh, sGh, noChem };
 }
 function renderStocking() {
   const t = state.tank, s = state.stock, m = stockingModel();
@@ -1969,6 +2118,8 @@ function renderStocking() {
   $("stPlanting").value = s.planting;
   $("stLph").value = s.lph > 0 ? s.lph : "";
   $("stMeasured").checked = !!s.lphMeasured;
+  $("stWcPct").value = String(s.wcPct);
+  $("stWcDays").value = String(s.wcDays);
   $("stMeasuredWrap").classList.toggle("on", !!s.lphMeasured);
   $("stFast").checked = !!s.fastGrowers;
   $("stFastWrap").classList.toggle("on", !!s.fastGrowers);
@@ -2048,20 +2199,27 @@ function renderStockResult() {
     <div class="stock-pct">${m.pct}% stocked</div>
     <div class="stock-verdict">${verdict}</div>
     <div class="levels">${["top", "mid", "bottom"].map(lvlPill).join("")}${m.levels.all > 0 ? '<span class="level-pill">plus grazers</span>' : ""}</div>
+    ${/* one <span> per row: .compat-row is a flexbox, so a loose <b> becomes its own column */""}
+    ${m.propped ? `<div class="stock-warn compat-row meh"><span>This only fits because of your water changes. On an ordinary weekly 30% it reads <b>${m.basePct}%</b>. That makes it a fragile plan: it works while you keep the routine up, and the week you're away or can't be bothered, the fish are the ones who find out.</span></div>` : ""}
+    ${m.wF < 1 ? `<div class="stock-warn compat-row ${m.weeklyWc > 0 ? "meh" : "no"}"><span>${m.weeklyWc > 0
+        ? `Changing ${state.stock.wcPct}% every ${state.stock.wcDays === 3.5 ? "half week" : state.stock.wcDays + " days"} is lighter than the usual weekly 30%, so nitrate builds up faster and the tank holds less than it otherwise would.`
+        : `With no water changes, nitrate only ever goes up. Plants slow that down; they don't stop it. This is counted against the tank's room, and it's the one number here you fix for free.`}</span></div>` : ""}
     ${m.noChem ? `<div class="stock-warn compat-row meh">No pH or GH entered on the My Tank screen, so this plan hasn't been checked on water chemistry — only size, temperature and space.</div>` : ""}
     ${m.sPh && m.sPh.ok && m.sGh && m.sGh.ok ? `<div class="stock-warn compat-row ok">Water suits all of them: they overlap at pH ${m.sPh.lo}–${m.sPh.hi} and ${m.sGh.lo}–${m.sGh.hi} dGH.</div>` : ""}
     ${m.warnings.map(w => `<div class="stock-warn ${w.lvl === "no" ? "compat-row no" : "compat-row meh"}">${esc(w.text)}</div>`).join("")}
     <details class="workings">
       <summary>Show the workings (and why this is only a guide)</summary>
-      <p>Each fish's load is its <b>adult length in cm to the power 1.3</b>, times a messiness factor (a cichlid fouls more water than a tetra the same length), times how many you keep. Your tank's room is <b>${state.tank.litres} L × 1.6</b>, adjusted by filtration (×${m.fF}) and planting (×${m.pF}).</p>
+      <p>Each fish's load is its <b>adult length in cm to the power 1.3</b>, times that fish's own messiness figure, times how many you keep. Your tank's room is <b>${state.tank.litres} L × 1.6</b>, adjusted by filtration (×${m.fF}), planting (×${m.pF}) and water changes (×${m.wF}).</p>
+      <p><b>The messiness figure is per fish, not a rule.</b> It's in the table below with where it came from. Built-in fish carry a figure set from what keepers report for that species; a fish you researched carries whatever your AI research returned, because the prompt asks for it; and anything with no figure at all is counted as an average community fish, which is a guess and is labelled as one. A cichlid or a puffer genuinely fouls more water than a tetra of the same length, so a single length-based rule would be wrong in both directions.${m.assumed.length ? ` <b>${m.assumed.length} here ${m.assumed.length === 1 ? "has" : "have"} no figure</b> (${m.assumed.map(r => esc(r.f.name)).join(", ")}) — re-research ${m.assumed.length === 1 ? "it" : "them"} and the prompt will ask for one.` : ""}</p>
+      <p><b>Water changes</b> count because they're how nitrate actually leaves the tank, but they're the one thing here that's a promise rather than a part. A filter is bolted on; a routine has to be kept. So the effect is deliberately small, and if a plan only fits because of a heavy routine, this says so rather than letting the number quietly carry it.</p>
       <p><b>Filtration</b> comes from real turnover when you've entered litres per hour — under 2× is under-filtered, 4–6× is the usual community target, 6–10× is strong for messy fish. <b>Media pulls in two directions at once:</b> more bio media means more bacteria and more biological capacity, but the same media blocks the water and slows the flow down, so the turnover drops. The box figure is measured with an empty filter and no hoses, so this knocks it down before working out turnover — packed with media is about 25% off, and a canister loses more again lifting water up its hoses. <b>Planting</b> counts because plants take up nitrate directly; fast growers like hornwort and water sprite do far more of that than slow ones like anubias, which is what the fast-grower tick is for.</p>
       <table>
-        <tr><th>Fish</th><th>Qty</th><th>Adult</th><th>Load</th></tr>
-        ${m.rows.map(r => `<tr><td>${esc(r.f.name)}</td><td>${r.qty}</td><td>${fishCm(r.f)} cm</td><td>${Math.round(r.load)}</td></tr>`).join("")}
-        <tr><td colspan="3"><b>Total load</b></td><td><b>${Math.round(m.totalLoad)}</b></td></tr>
-        <tr><td colspan="3"><b>Room in your tank</b></td><td><b>${Math.round(m.room)}</b></td></tr>
+        <tr><th>Fish</th><th>Qty</th><th>Adult</th><th>Messiness</th><th>Load</th></tr>
+        ${m.rows.map(r => `<tr><td>${esc(r.f.name)}</td><td>${r.qty}</td><td>${fishCm(r.f)} cm</td><td>${fishLoad(r.f)}× <span class="sr-meta">${esc(loadSource(r.f))}</span></td><td>${Math.round(r.load)}</td></tr>`).join("")}
+        <tr><td colspan="4"><b>Total load</b></td><td><b>${Math.round(m.totalLoad)}</b></td></tr>
+        <tr><td colspan="4"><b>Room in your tank</b></td><td><b>${Math.round(m.room)}</b></td></tr>
       </table>
-      <p><b>Why it's a guide, not a rule:</b> there is no agreed stocking formula in the hobby — the old "inch per gallon" breaks down at both ends. This model ignores how territorial a fish is, how much you feed, how often you change water, and whether the tank is tall or long. Use it to spot the obvious, then check a real stocking against two sources before you buy.</p>
+      <p><b>Why it's a guide, not a rule:</b> there is no agreed stocking formula in the hobby — the old "inch per gallon" breaks down at both ends. This model still ignores how territorial a fish is, how much you feed, and whether the tank is tall or long. Use it to spot the obvious, then check a real stocking against two sources before you buy.</p>
     </details>`;
 }
 
@@ -2109,7 +2267,7 @@ function dataBundle() {
     tank: state.tank, verdicts: state.verdicts, custom: state.custom, tasks: state.tasks,
     feedback: state.feedback, shortlist: state.shortlist, finderMode: state.finderMode,
     fbPhone: state.fbPhone, stock: state.stock,
-    savedTanks: state.savedTanks, photoPick: state.photoPick
+    savedTanks: state.savedTanks, photoPick: state.photoPick, ownPhotos: state.ownPhotos
   };
 }
 function applyBundle(d) {
@@ -2125,6 +2283,7 @@ function applyBundle(d) {
   state.stock = d.stock && typeof d.stock === "object" ? d.stock : null;
   state.savedTanks = Array.isArray(d.savedTanks) ? d.savedTanks : [];
   state.photoPick = d.photoPick && typeof d.photoPick === "object" ? d.photoPick : {};
+  state.ownPhotos = d.ownPhotos && typeof d.ownPhotos === "object" ? d.ownPhotos : {};
   if (d.finderMode === "swipe" || d.finderMode === "grid") state.finderMode = d.finderMode;
   state.sel = null; addMode = null; swipeIdx = 0; gridFilter = "all";
   migrateTank(); save();
@@ -2258,6 +2417,8 @@ $("stFilterType").addEventListener("change", () => { state.stock.filterType = $(
 // media now changes the real flow, so the turnover note has to redraw too
 $("stMedia").addEventListener("change", () => { state.stock.media = $("stMedia").value; save(); renderTurnover(); renderStockResult(); });
 $("stPlanting").addEventListener("change", () => { state.stock.planting = $("stPlanting").value; save(); renderStockResult(); });
+$("stWcPct").addEventListener("change", () => { state.stock.wcPct = +$("stWcPct").value; save(); renderStockResult(); });
+$("stWcDays").addEventListener("change", () => { state.stock.wcDays = +$("stWcDays").value; save(); renderStockResult(); });
 $("stLph").addEventListener("input", () => {
   const v = +$("stLph").value;
   state.stock.lph = v > 0 ? v : null;
