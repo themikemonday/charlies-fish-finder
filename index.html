@@ -1669,13 +1669,22 @@ function renderAddPanel() {
         type: $("pf-type-" + i).value, title: $("pf-title-" + i).value.trim(),
         why: $("pf-why-" + i).value.trim(), solve: $("pf-solve-" + i).value.trim()
       })).filter(p => p.title);
-      const obj = {
+      /* This form only shows some of what a fish carries. The rest — the research
+         figures the stocking maths and the water checks run on — has to ride across
+         an edit untouched. Without this, opening an AI-researched fish to fix a typo
+         silently stripped its swimming level, adult cm, pH and hardness ranges,
+         group size, price and load factor, and the fish quietly got worse. */
+      const carried = editing ? {
+        cm: editing.cm, level: editing.level, ph: editing.ph, gh: editing.gh,
+        minGroup: editing.minGroup, aud: editing.aud, load: editing.load
+      } : {};
+      const obj = Object.assign(carried, {
         name: $("ff-name").value, sci: $("ff-sci").value, emoji: $("ff-emoji").value,
         size: $("ff-size").value, group: $("ff-group").value,
         temp: ($("ff-tmin").value === "" || $("ff-tmax").value === "") ? [] : [+$("ff-tmin").value, +$("ff-tmax").value],
         minL: +$("ff-minl").value, shrimp: $("ff-shrimp").value, snail: $("ff-snail").value,
         blurb: $("ff-blurb").value, teach: $("ff-teach").value, problems
-      };
+      });
       const errs = validateFish(obj), msg = $("formMsg");
       if (errs.length) { msg.textContent = errs.join(" "); msg.hidden = false; return; }
       saveCustomFish(normaliseFish(obj, editing ? editing.id : null), editing ? editing.id : null);
@@ -1789,7 +1798,7 @@ function dataMsg(text, ok) {
 }
 
 /* ---------------- Feedback ---------------- */
-const APP_VERSION = "v13.1";
+const APP_VERSION = "v13.2";
 function fbContext() {
   const f = allFish().find(x => x.id === state.sel), t = state.tank;
   const tabName = { care: "My Tank", stock: "Stocking" }[state.view] || "Fish Finder";
